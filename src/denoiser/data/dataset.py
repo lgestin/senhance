@@ -1,36 +1,27 @@
-import json
 import torch
-
-from pathlib import Path
 from torch.utils.data import Dataset
 
-from denoiser.data.audio import Audio
+from dataclasses import dataclass
+
+from denoiser.data.utils import resample
+from denoiser.data.source import AudioSource
 
 
-class AudioSource:
-    def __init__(self, index_file: str, sequence_length: int = None):
-        """
-        index_file: str Path to a source file. A source file is a json.
-        """
+@dataclass
+class Sample:
+    waveform: torch.Tensor
+    sample_rate: int
+    idx: int
 
-        self.index_file = Path(index_file)
-        self.sequence_length = sequence_length
 
-        with open(index_file, "r") as f:
-            index = json.load(f)
-        self.index = index
+class AudioDataset(Dataset):
+    def __init__(self, audio_source: AudioSource, sample_rate: int):
+        self.audio_source = audio_source
+        self.sample_rate = sample_rate
 
-    def __getitem__(self, i: int):
-        file = self.index[i]
-        path = file.get("filepath")
-        sr = file.get("sample_rate")
-        duration = file.get("duration")
-        n_frames = int(duration * sr)
-
-        if self.sequence_length is None:
-            start, end = 0, None
-        else:
-            start = torch.randint(0, n_frames - self.sequence_length, size=(1,))
-            end = start + self.sequence_length
-        audio = Audio(self.index_file.parent / path, start=start, end=end)
-        return audio
+    def __getitem__(self, idx: int) -> Sample:
+        audio = self.audio_source[idx]
+        waveform = audio.waveform
+        waveform = resample(waveform, audio.sample_rate, self.sample_rate)
+        item = Sample(waveform=audio.waveform, sample_rate=self.sample_rate, idx=idx)
+        return item
