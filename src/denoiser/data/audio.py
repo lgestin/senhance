@@ -23,7 +23,8 @@ class Audio:
 
     @property
     def waveform(self):
-        if self._waveform is None:
+        waveform = self._waveform
+        if waveform is None:
             waveform, sr = load_audio(self.filepath, start=self.start, end=self.end)
             self._waveform = waveform
             self._sample_rate = sr
