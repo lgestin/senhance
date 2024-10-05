@@ -14,6 +14,7 @@ class Audio:
     def __post_init__(self):
         self._waveform = None
         self._sample_rate = None
+        self._loudness = None
 
     @property
     def sample_rate(self):
@@ -36,3 +37,12 @@ class Audio:
         sample_rate = self.sample_rate
         duration = waveform.shape[-1] / sample_rate
         return duration
+
+    @property
+    def loudness(self):
+        loudness = self._loudness
+        if loudness is None:
+            loudness = torchaudio.functional.loudness(
+                self.waveform, sample_rate=self.sample_rate
+            )
+        return loudness.item()
