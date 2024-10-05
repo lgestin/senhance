@@ -28,15 +28,9 @@ def create_data_index(
         return info
 
     with ThreadPoolExecutor(n_workers) as executor:
-        futures = []
-        for file in data_folder.glob("**/*.wav"):
-            future = executor.submit(extract_informations, file)
-            futures.append(future)
-
-    index = []
-    for future in tqdm(futures):
-        info = future.result()
-        index.append(info)
+        files = list(data_folder.glob("**/*.wav"))
+        infos = executor.map(extract_informations, files)
+        index = list(tqdm(infos, total=len(files)))
 
     if index_path is None:
         index_path = data_folder / "index.json"
@@ -45,4 +39,4 @@ def create_data_index(
 
 
 if __name__ == "__main__":
-    create_data_index("/data/denoising/speech/daps", None, n_workers=8)
+    create_data_index("/data/denoising/speech/daps", None, n_workers=4)
