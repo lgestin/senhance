@@ -26,8 +26,8 @@ class AudioSource:
         file = self.index[idx]
         path = file.get("filepath")
         sr = file.get("sample_rate")
-        duration = file.get("duration")
-        n_frames = int(duration * sr)
+        duration_s = file.get("duration_s")
+        n_frames = int(duration_s * sr)
 
         if self.sequence_length is None:
             start, end = 0, None
