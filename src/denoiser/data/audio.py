@@ -124,7 +124,31 @@ class Audio:
     def random_excerpt(self, duration_s: float, generator: torch.Generator = None):
         assert duration_s <= self.duration_s
 
-        offset_s = torch.rand((1,), generator=generator).item()
+        offset_s = torch.rand(tuple(), generator=generator).item()
         offset_s = (self.duration_s - duration_s) * offset_s
         excerpt = self.excerpt(offset_s=offset_s, duration_s=duration_s)
         return excerpt
+
+    def salient_excerpt(
+        self,
+        duration_s: float,
+        loudness_threshold: float = -60.0,  # -40, -60
+        n_tries: int = 10,
+        generator: torch.Generator = None,
+    ):
+        assert 0.5 <= duration_s <= self.duration_s
+        loudness = self.loudness
+        excerpt = self.random_excerpt(duration_s=duration_s, generator=generator)
+        excerpt._loudness = None
+
+        n_try = 0
+        while (excerpt.loudness < loudness_threshold) and (n_try < n_tries):
+            excerpt = self.random_excerpt(duration_s=duration_s, generator=generator)
+            excerpt._loudness = None
+            n_try += 1
+        excerpt._loudness = loudness
+        return excerpt
+
+    @property
+    def device(self):
+        return self.waveform.device
