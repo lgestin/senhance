@@ -2,7 +2,7 @@ from denoiser.data.source import AudioSource
 
 
 def test_audiosource():
-    asource = AudioSource("../../data/daps/clean/index.json")
+    asource = AudioSource("/data/denoising/speech/daps/index.json")
 
     item = asource[0]
     assert item
@@ -10,9 +10,12 @@ def test_audiosource():
     length = len(asource)
     assert length
 
-    seq_len = 8192
-    asource = AudioSource("../../data/daps/clean/index.json", sequence_length=seq_len)
+    sequence_length_s = 0.5
+    asource = AudioSource(
+        "/data/denoising/speech/daps/index.json",
+        sequence_length_s=sequence_length_s,
+    )
 
     for i in range(10):
         item = asource[i]
-        assert item.waveform.shape[-1] == seq_len
+        assert item.waveform.shape[-1] / item.sample_rate == sequence_length_s

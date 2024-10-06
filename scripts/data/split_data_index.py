@@ -17,7 +17,7 @@ def split_data_index(
     splits = {"train": n_train, "valid": n_valid, "test": n_test}
 
     # convert ratio to n
-    if any(isinstance(n, float) for n in splits):
+    if all(isinstance(n, float) for n in splits):
         assert sum(splits.values()) == 1.0
         for key, ratio in splits.copy().items():
             splits[key] = int(ratio * n_total)
