@@ -42,7 +42,7 @@ dependencies = [
 extra-dependencies = [
   "pytest",
   "ruff",
-  "black",
+  "black[jupyter]",
   "isort",
   "ipdb",
   "ipykernel",
