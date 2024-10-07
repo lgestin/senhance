@@ -67,6 +67,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
 
     # SPEECH
+    sr = config.sample_rate
     speech_folder = Path(config.speech_folder)
     train_audio_source = AudioSource(
         speech_folder / "index.train.json",
@@ -74,7 +75,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
     train_dataset = AudioDataset(
         train_audio_source,
-        sample_rate=config.sample_rate,
+        sample_rate=sr,
         augmentation=train_augments,
     )
     train_dloader = DataLoader(
@@ -91,7 +92,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
     valid_dataset = AudioDataset(
         train_audio_source,
-        sample_rate=config.sample_rate,
+        sample_rate=sr,
         augmentation=valid_augments,
     )
     valid_dloader = DataLoader(
@@ -106,7 +107,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
     test_dataset = AudioDataset(
         test_audio_source,
-        sample_rate=config.sample_rate,
+        sample_rate=sr,
         augmentation=test_augments,
     )
     test_dloader = DataLoader(
@@ -156,10 +157,12 @@ def train(exp_path: str, config: TrainingConfig):
 
         opt.zero_grad()
         scaler.scale(loss).backward()
+        scaler.unscale_(opt)
+        grad = torch.nn.utils.clip_grad_norm_(cflow_matcher.parameters(), 1e0)
         scaler.step(opt)
         scaler.update()
 
-        return {"loss": loss.item()}
+        return {"loss": loss.item(), "grad": grad}
 
     @torch.inference_mode()
     def sample(batch):
@@ -179,22 +182,24 @@ def train(exp_path: str, config: TrainingConfig):
         )[0]
         with torch.no_grad():
             cleaned = codec.decode(x_cleaned)
-        return cleaned, clean, noisy
+        return cleaned
 
+    smp_batch = next(iter(test_dloader))
     writer = SummaryWriter(exp_path)
     pbar = tqdm(total=config.max_steps)
-    smp_batch = next(iter(test_dloader))
+    for i, (clean, noisy) in enumerate(zip(smp_batch.waveforms, smp_batch.noisy)):
+        writer.add_audio(f"smp/{i}.clean.wav", clean, 0, sr)
+        writer.add_audio(f"smp/{i}.noisy.wav", noisy, 0, sr)
 
     step = 0
     while 1:
         for batch in train_dloader:
 
             if step % config.smp_steps == 0:
-                clean, cleaned, noisy = sample(smp_batch)
-                for i, (y_hat, y, x) in enumerate(zip(clean, cleaned, noisy)):
-                    writer.add_audio(f"smp/{i}.clean.wav", y_hat, step)
-                    writer.add_audio(f"smp/{i}.cleaned.wav", y, step)
-                    writer.add_audio(f"smp/{i}.noisy.wav", x, step)
+                cflow_matcher.eval()
+                cleaned = sample(smp_batch)
+                for i, y_hat in enumerate(cleaned):
+                    writer.add_audio(f"smp/{i}.cleaned.wav", y_hat, step, sr)
 
             cflow_matcher.train()
             metrics = process_batch(batch)
