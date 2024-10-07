@@ -86,6 +86,12 @@ class Audio:
             ).item()
         return loudness
 
+    def mono(self):
+        waveform = self.waveform
+        waveform = torch.mean(waveform, dim=0, keepdim=True)
+        self._waveform = waveform
+        return self
+
     def resample(self, sample_rate: int):
         if sample_rate != self.sample_rate:
             waveform = torchaudio.functional.resample(
