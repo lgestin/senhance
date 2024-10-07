@@ -7,7 +7,7 @@ class ResnetBlock1d(nn.Module):
         super().__init__()
         self.convs = nn.Sequential(
             nn.GroupNorm(32, in_channels),
-            nn.SiLU(inplace=True),
+            nn.SiLU(),
             nn.Conv1d(
                 in_channels,
                 out_channels,
@@ -16,7 +16,7 @@ class ResnetBlock1d(nn.Module):
                 padding=dilation,
             ),
             nn.GroupNorm(32, out_channels),
-            nn.SiLU(inplace=True),
+            nn.SiLU(),
             nn.Conv1d(
                 out_channels,
                 out_channels,
