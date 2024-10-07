@@ -164,7 +164,7 @@ class BackgroundNoise(Augmentation):
         snr = parameters.snr[parameters.apply]
 
         gain = clean_loudness - noise_loudness - snr
-        gain = math.log(10) / 20 * torch.exp(gain)
+        gain = torch.exp(math.log(10) / 20 * gain)
         gain = gain.view(-1, 1, 1)
 
         augmented = waveform.clone()
