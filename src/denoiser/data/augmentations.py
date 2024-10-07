@@ -36,7 +36,7 @@ class BatchAugmentParameters:
         return self._parameters[idx]
 
     def to(self, device: str | torch.device):
-        for key in self.attrs:
+        for key in self._parameters[0].__annotations__.keys():
             value = getattr(self, key)
             if torch.is_tensor(value):
                 value = value.to(device)
