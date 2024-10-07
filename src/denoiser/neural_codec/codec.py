@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class Codec(nn.Model):
+class Codec(nn.Module):
     def __init__(self):
         super().__init__()
 
