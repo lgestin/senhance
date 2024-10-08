@@ -29,7 +29,7 @@ class AudioSource:
         audio = Audio.from_audioinfo(audioinfo)
         generator = torch.Generator().manual_seed(idx)
         if self.sequence_length_s is not None:
-            audio = audio.random_excerpt(
+            audio = audio.salient_excerpt(
                 duration_s=self.sequence_length_s,
                 generator=generator,
             )

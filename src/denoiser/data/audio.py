@@ -1,3 +1,4 @@
+import math
 import torch
 import torchaudio
 import soundfile as sf
@@ -103,6 +104,13 @@ class Audio:
             )
             self._waveform = waveform
             self._sample_rate = sample_rate
+        return self
+
+    def normalize(self, db: float):
+        gain = db - self.loudness
+        gain = math.exp(math.log(10) / 20 * gain)
+        self._waveform = gain * self.waveform
+        self._loudness = db
         return self
 
     @classmethod
