@@ -15,14 +15,14 @@ class ConditionalFlowMatcher(nn.Module):
         self.register_buffer("sigma_0", torch.as_tensor(sigma_0))
 
     def sigma_t(self, t):
-        sigma_t = self.sigma_1 - (self.sigma_1 - self.sigma_0) * t
+        sigma_t = self.sigma_0 - (self.sigma_0 - self.sigma_1) * t
         return sigma_t
 
     def mu_t(self, t: torch.FloatTensor, x: torch.Tensor):
         return t * x
 
     def u_t(self, t: torch.FloatTensor, x: torch.FloatTensor, x_1: torch.FloatTensor):
-        u_t = (x_1 - (self.sigma_1 - self.sigma_0) * x) / self.sigma(t)
+        u_t = (x_1 - (self.sigma_0 - self.sigma_1) * x) / self.sigma(t)
         return u_t
 
     def phi_t(self, t: torch.FloatTensor, x: torch.FloatTensor, x_1: torch.FloatTensor):
@@ -35,11 +35,11 @@ class ConditionalFlowMatcher(nn.Module):
         x_1: torch.FloatTensor,
         x_cond=torch.LongTensor,
     ):
-        x_0 = torch.randn_like(x_1) * self.sigma_1
+        x_0 = torch.randn_like(x_1) * self.sigma_0
         x_t = self.sigma_t(t) * x_0 + t * x_1
         v_t = self.module(t=t, x_t=x_t, x_cond=x_cond)
 
-        u_t = x_1 - (self.sigma_1 - self.sigma_0) * x_0
+        u_t = x_1 - (self.sigma_0 - self.sigma_1) * x_0
         return v_t, u_t
 
     @torch.inference_mode
