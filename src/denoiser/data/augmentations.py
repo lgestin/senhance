@@ -1,7 +1,7 @@
+import time
 import math
 import json
 import torch
-import torch.nn as nn
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -128,11 +128,11 @@ class BackgroundNoise(Augmentation):
             i = torch.randint(0, len(self.index), size=(1,), generator=generator).item()
             index = self.index[i]
             noise = self.load_noise(index)
-            noise = noise.mono().resample(audio.sample_rate)
             noise = noise.random_excerpt(
                 duration_s=audio.duration_s,
                 generator=generator,
             )
+            noise = noise.mono().resample(audio.sample_rate)
         else:
             zeros = torch.zeros_like(audio.waveform)
             noise = Audio(waveform=zeros, sample_rate=audio.sample_rate)
