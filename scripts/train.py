@@ -145,7 +145,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
     cflow_matcher = cflow_matcher.to(device)
 
-    opt = torch.optim.AdamW(unet.parameters(), lr=config.lr)
+    opt = torch.optim.AdamW(cflow_matcher.parameters(), lr=config.lr)
     scaler = torch.GradScaler()
 
     def process_batch(batch):
@@ -158,9 +158,13 @@ def train(exp_path: str, config: TrainingConfig):
                 x_clean = codec.encode(clean)
                 x_noisy = codec.encode(noisy)
 
-        t = torch.rand(clean.shape[0], 1, 1, device=device)
+        timestep = torch.rand((clean.shape[0],), device=device)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
-            vt, ut = cflow_matcher(t, x_1=x_clean, x_cond=x_noisy)
+            vt, ut = cflow_matcher(
+                x_1=x_clean,
+                x_cond=x_noisy,
+                timestep=timestep,
+            )
             loss = torch.nn.functional.mse_loss(vt, ut)
 
         if cflow_matcher.training:
@@ -187,11 +191,12 @@ def train(exp_path: str, config: TrainingConfig):
             x_noisy = codec.encode(noisy)
 
         x_0 = cflow_matcher.sigma_0 * torch.randn_like(x_noisy)
+        timesteps = torch.linspace(0, 1, config.n_cfm_steps).tolist()
         x_cleaned = cflow_matcher.sample(
             x_0=x_0,
             x_cond=x_noisy,
-            n_steps=config.n_cfm_steps,
-        )[0]
+            timesteps=timesteps,
+        )
         with torch.no_grad():
             cleaned = codec.decode(x_cleaned)
         return noisy, cleaned
