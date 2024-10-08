@@ -1,4 +1,5 @@
 import torch
+
 from denoiser.data.audio import Audio
 from denoiser.models.codec.mimi import MimiCodec
 

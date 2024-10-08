@@ -1,9 +1,5 @@
-import torch
-
-from denoiser.data.source import AudioSource
 from denoiser.data.dataset import AudioDataset
-
-from audiotools import AudioSignal
+from denoiser.data.source import AudioSource
 
 
 def test_denoising_dataset():

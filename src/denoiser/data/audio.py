@@ -1,9 +1,10 @@
 import math
-import torch
-import torchaudio
-import soundfile as sf
 from dataclasses import dataclass
 from pathlib import Path
+
+import soundfile as sf
+import torch
+import torchaudio
 
 from denoiser.data.utils import load_audio
 

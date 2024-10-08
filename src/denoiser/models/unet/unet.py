@@ -1,11 +1,11 @@
-import torch
-import torch.nn as nn
-
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from denoiser.models.unet.attention import SelfAttention
+import torch
+import torch.nn as nn
+
 from denoiser.models.cfm.utils import timestep_embedding
+from denoiser.models.unet.attention import SelfAttention
 
 
 class TimestepAwareModule(nn.Module):

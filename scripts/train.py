@@ -1,23 +1,20 @@
-import time
-import torch
-
-from tqdm import tqdm
-from pathlib import Path
-from dataclasses import dataclass
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
 
+import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
-from denoiser.data.source import AudioSource
-from denoiser.data.dataset import AudioDataset
+from denoiser.data.augmentations.augmentations import BackgroundNoise
 from denoiser.data.collate import collate
-from denoiser.data.augmentations import BackgroundNoise
-
-from denoiser.models.codec.mimi import MimiCodec
+from denoiser.data.dataset import AudioDataset
+from denoiser.data.source import AudioSource
 from denoiser.models.cfm.cfm import ConditionalFlowMatcher
-from denoiser.models.unet.unet import UNET1dDims, UNET1d
+from denoiser.models.codec.mimi import MimiCodec
+from denoiser.models.unet.unet import UNET1d, UNET1dDims
 
 
 @dataclass
@@ -123,7 +120,7 @@ def train(exp_path: str, config: TrainingConfig):
         sequence_length_s=config.sequence_length_s,
     )
     valid_dataset = AudioDataset(
-        train_audio_source,
+        valid_audio_source,
         sample_rate=sr,
         augmentation=valid_augments,
     )

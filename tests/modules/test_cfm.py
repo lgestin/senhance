@@ -1,14 +1,14 @@
 import torch
-import torch.nn as nn
 
-from denoiser.models.unet.unet import UNET1d
 from denoiser.models.cfm.cfm import ConditionalFlowMatcher
+from denoiser.models.unet.unet import UNET1d, UNET1dDims
 
 
 def test_cfm():
     batch_size = 8
     dim = 32
-    module = UNET1d(dim, dim, dim, n_layers=1)
+    dims = UNET1dDims(in_dim=dim, dim=dim, out_dim=dim, n_layers=1)
+    module = UNET1d(dims)
     cfm = ConditionalFlowMatcher(module=module)
 
     x = torch.randn(batch_size, dim, 128)

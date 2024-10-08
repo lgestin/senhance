@@ -1,6 +1,7 @@
 import torch
-from denoiser.data.augmentations import BatchAugmentationParameters
-from denoiser.data.dataset import Sample, Batch
+
+from denoiser.data.augmentations.augmentations import BatchAugmentationParameters
+from denoiser.data.dataset import Batch, Sample
 
 
 def collate(samples: list[Sample]) -> Batch:

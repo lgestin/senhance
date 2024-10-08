@@ -1,12 +1,11 @@
 import torch
+from moshi.models.compression import MimiModel
+from moshi.models.loaders import _quantizer_kwargs, _seanet_kwargs, _transformer_kwargs
+from moshi.modules import SEANetDecoder, SEANetEncoder, transformer
+from moshi.quantization import SplitResidualVectorQuantizer
+from safetensors.torch import load_model
 
 from denoiser.models.codec.codec import Codec
-from moshi.modules import SEANetEncoder, SEANetDecoder, transformer
-from moshi.quantization import SplitResidualVectorQuantizer
-from moshi.models.compression import MimiModel
-from moshi.models.loaders import _seanet_kwargs, _transformer_kwargs, _quantizer_kwargs
-
-from safetensors.torch import load_model
 
 
 class MimiCodec(Codec):

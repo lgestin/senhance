@@ -1,15 +1,15 @@
+from dataclasses import dataclass
+
 import torch
 from torch.utils.data import Dataset
 
-from dataclasses import dataclass
-
 from denoiser.data.audio import Audio
-from denoiser.data.source import AudioSource
-from denoiser.data.augmentations import (
+from denoiser.data.augmentations.augmentations import (
     Augmentation,
     AugmentationParameters,
     BatchAugmentationParameters,
 )
+from denoiser.data.source import AudioSource
 
 
 @dataclass
@@ -40,7 +40,7 @@ class AudioDataset(Dataset):
         self,
         audio_source: AudioSource,
         sample_rate: int,
-        augmentation: Augmentation,
+        augmentation: Augmentation = None,
     ):
         self.audio_source = audio_source
         self.sample_rate = sample_rate
@@ -52,8 +52,11 @@ class AudioDataset(Dataset):
     def __getitem__(self, idx: int) -> Sample:
         audio = self.audio_source[idx]
         audio = audio.resample(self.sample_rate).normalize(-24.0)
-        augmentation_params = self.augmentation.sample_parameters(
-            audio=audio,
-            generator=torch.Generator().manual_seed(idx),
-        )
+
+        augmentation_params = None
+        if self.augmentation is not None:
+            augmentation_params = self.augmentation.sample_parameters(
+                audio=audio,
+                generator=torch.Generator().manual_seed(idx),
+            )
         return Sample(idx=idx, audio=audio, augmentation_params=augmentation_params)

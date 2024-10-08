@@ -1,13 +1,13 @@
 import torch
-import torch.nn as nn
 
-from denoiser.models.unet.unet import UNET1d
+from denoiser.models.unet.unet import UNET1d, UNET1dDims
 
 
 def test_unet():
     batch_size = 8
     in_dim, dim, out_dim = 4, 32, 4
-    unet = UNET1d(in_dim, dim, out_dim)
+    dims = UNET1dDims(in_dim=in_dim, dim=dim, out_dim=out_dim, n_layers=1)
+    unet = UNET1d(dims)
 
     x = torch.randn(batch_size, in_dim, 128)
     x_cond = torch.randn_like(x)

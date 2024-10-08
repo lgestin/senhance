@@ -1,7 +1,7 @@
 import json
-import torch
-
 from pathlib import Path
+
+import torch
 
 from denoiser.data.audio import Audio, AudioInfo
 

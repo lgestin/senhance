@@ -1,8 +1,9 @@
 import json
-from tqdm import tqdm
-from pathlib import Path
-from dataclasses import asdict
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
+from pathlib import Path
+
+from tqdm import tqdm
 
 from denoiser.data.audio import Audio, AudioInfo
 

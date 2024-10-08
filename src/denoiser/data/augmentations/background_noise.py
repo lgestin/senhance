@@ -1,16 +1,16 @@
 import json
 import math
+from dataclasses import dataclass
+from pathlib import Path
+
 import torch
 
-from pathlib import Path
-from dataclasses import dataclass
-
 from denoiser.data.audio import Audio, AudioInfo
-from denoiser.data.utils import truncated_normal
 from denoiser.data.augmentations.augmentations import (
     Augmentation,
     BatchAugmentationParameters,
 )
+from denoiser.data.utils import truncated_normal
 
 
 @dataclass
