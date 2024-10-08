@@ -44,8 +44,8 @@ class UNET1d(nn.Module):
         t_emb_dim = 4 * dim
         self.t_emb = nn.Sequential(
             nn.Linear(dim, t_emb_dim),
-            nn.SiLU(),
-            nn.Linear(t_emb_dim, t_emb_dim),
+            nn.SiLU(inplace=True),
+            nn.Linear(t_emb_dim, dim),
         )
 
         self.in_conv = nn.Conv1d(in_dim, dim, 1)
