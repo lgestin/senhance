@@ -5,6 +5,8 @@ from tqdm import tqdm
 from pathlib import Path
 from dataclasses import dataclass
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -15,7 +17,7 @@ from denoiser.data.augmentations import BackgroundNoise
 
 from denoiser.models.codec.mimi import MimiCodec
 from denoiser.models.cfm.cfm import ConditionalFlowMatcher
-from denoiser.models.unet.unet import UNET1d
+from denoiser.models.unet.unet import UNET1dDims, UNET1d
 
 
 @dataclass
@@ -46,6 +48,29 @@ class TrainingConfig:
     noamp: bool = False
 
 
+@dataclass
+class Checkpoint:
+    step: int
+    best_loss: float
+    model: dict[str, torch.Tensor]
+    opt: dict[str, torch.Tensor]
+
+    def __post_init__(self):
+        self.executor = ThreadPoolExecutor(1)
+
+    def save(self, path: str):
+        def save():
+            torch.save({k: getattr(self, k) for k in self.__annotations__.keys()}, path)
+
+        self.executor.submit(save)
+
+    @classmethod
+    def load(cls, path: str, map_location: str | torch.device = "cpu"):
+        checkpoint = torch.load(path, map_location=map_location)
+        checkpoint = cls(**checkpoint)
+        return cls
+
+
 def train(exp_path: str, config: TrainingConfig):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(device)
@@ -55,21 +80,21 @@ def train(exp_path: str, config: TrainingConfig):
     noise_folder = Path(config.noise_folder)
     train_augments = BackgroundNoise(
         noise_index_path=noise_folder / "index.train.json",
-        min_snr=-5,
-        max_snr=25,
+        min_snr=5,
+        max_snr=30,
         min_duration_s=config.sequence_length_s,
         p=0.8,
     )
     valid_augments = BackgroundNoise(
         noise_index_path=noise_folder / "index.valid.json",
-        min_snr=-5,
-        max_snr=25,
+        min_snr=5,
+        max_snr=30,
         min_duration_s=config.sequence_length_s,
     )
     test_augments = BackgroundNoise(
         noise_index_path=noise_folder / "index.test.json",
-        min_snr=-5,
-        max_snr=25,
+        min_snr=5,
+        max_snr=30,
         min_duration_s=config.sequence_length_s,
     )
 
@@ -129,12 +154,13 @@ def train(exp_path: str, config: TrainingConfig):
     codec = codec.to(device)
     codec = torch.compile(codec, disable=not config.nocompile)
 
-    unet = UNET1d(
+    unet_dims = UNET1dDims(
         in_dim=codec.dim,
         dim=config.n_dim,
         out_dim=codec.dim,
         n_layers=config.n_layers,
     )
+    unet = UNET1d(unet_dims)
     unet = unet.to(device)
     unet = torch.compile(unet, disable=not config.nocompile)
 
@@ -175,7 +201,7 @@ def train(exp_path: str, config: TrainingConfig):
             scaler.step(opt)
             scaler.update()
 
-        metrics = {"loss": loss.item()}
+        metrics = {"loss": loss}
         if cflow_matcher.training:
             metrics["grad"] = grad
         return metrics
@@ -213,7 +239,7 @@ def train(exp_path: str, config: TrainingConfig):
         writer.add_audio(f"1noise/{i}.wav", noise, 0, sr)
         writer.add_audio(f"2reconstructed/{i}.wav", reconstructed, 0, sr)
 
-    step = 0
+    step, best_loss = 0, torch.inf
     while 1:
         for batch in train_dloader:
 
@@ -225,16 +251,29 @@ def train(exp_path: str, config: TrainingConfig):
                     writer.add_audio(f"4cleaned/{i}.wav", y_hat, step, sr)
 
             if step % config.val_steps == 0:
-                torch.save(
-                    cflow_matcher.state_dict(),
-                    Path(exp_path) / f"checkpoint.{step}.pt",
+                cflow_matcher.eval()
+                val_metrics = defaultdict(list)
+                for vbatch in valid_dloader:
+                    metrics = process_batch(vbatch)
+                    for key, value in metrics.items():
+                        val_metrics[key] += [value]
+
+                val_metrics = {
+                    k: torch.stack(v).mean().item() for k, v in val_metrics.items()
+                }
+                for key, values in val_metrics.items():
+                    writer.add_scalar(f"valid/{key}", values, step)
+
+                checkpoint = Checkpoint(
+                    step=step,
+                    best_loss=best_loss,
+                    model=cflow_matcher.state_dict(),
+                    opt=opt.state_dict(),
                 )
-                # cflow_matcher.eval()
-                # val_metrics = defaultdict(list)
-                # for vbatch in valid_dloader:
-                #     metrics = process_batch(vbatch)
-                #     for key, value in metrics.items():
-                #         val_metrics += [value]
+                checkpoint.save(Path(exp_path) / f"checkpoint.{step}.pt")
+                if (loss := val_metrics["loss"]) < best_loss:
+                    best_loss = loss
+                    checkpoint.save(Path(exp_path) / "checkpoint.best.pt")
 
             cflow_matcher.train()
             metrics = process_batch(batch)
@@ -246,9 +285,9 @@ def train(exp_path: str, config: TrainingConfig):
 
             step += 1
             if step >= config.max_steps:
+                checkpoint.executor.shutdown()
                 pbar.close()
                 return
-            t = time.perf_counter()
 
 
 if __name__ == "__main__":
