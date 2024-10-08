@@ -184,7 +184,7 @@ OUTPUT_PATH="./datasets_fullband"
 
 mkdir -p $OUTPUT_PATH/{clean_fullband,noise_fullband}
 
-NUM_PROCESSES=8
+NUM_PROCESSES=16
 
 # Function to process each BLOB
 process_blob() {
@@ -203,7 +203,7 @@ process_blob() {
     wget "$URL" -O "$OUTPUT_PATH/$BLOB"
     
     # Same, + unpack files on the fly (UNCOMMENT if needed)
-    curl "$URL" | tar -C "$OUTPUT_PATH" -f - -x -j
+    # curl "$URL" | tar -C "$OUTPUT_PATH" -f - -x -j
 }
 
 export -f process_blob

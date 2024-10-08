@@ -1,6 +1,6 @@
 import torch
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations import BackgroundNoise, BatchAugmentParameters
+from denoiser.data.augmentations import BackgroundNoise, BatchAugmentationParameters
 
 
 def test_background_noise():
@@ -17,10 +17,9 @@ def test_background_noise():
     waveforms = torch.stack([excerpt.waveform for excerpt in excerpts])
 
     augment_params = [
-        augment.sample_augment_parameters(excerpt, generator=generator)
-        for excerpt in excerpts
+        augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
     ]
-    augment_params = BatchAugmentParameters(augment_params)
+    augment_params = BatchAugmentationParameters(augment_params)
 
     augmented = augment.augment(waveforms, augment_params)
     assert torch.is_tensor(augmented)

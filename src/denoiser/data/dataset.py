@@ -7,8 +7,8 @@ from denoiser.data.audio import Audio
 from denoiser.data.source import AudioSource
 from denoiser.data.augmentations import (
     Augmentation,
-    AugmentParameters,
-    BatchAugmentParameters,
+    AugmentationParameters,
+    BatchAugmentationParameters,
 )
 
 
@@ -16,7 +16,7 @@ from denoiser.data.augmentations import (
 class Sample:
     idx: int
     audio: Audio
-    augmentation_params: AugmentParameters
+    augmentation_params: AugmentationParameters
 
 
 @dataclass
@@ -24,12 +24,12 @@ class Batch:
     idxs: list[int]
     audios: list[Audio]
     waveforms: torch.FloatTensor
-    augmentation_params: BatchAugmentParameters
+    augmentation_params: BatchAugmentationParameters
 
     def to(self, device: str | torch.device):
         for key in self.__annotations__.keys():
             value = getattr(self, key)
-            if torch.is_tensor(value) or isinstance(value, BatchAugmentParameters):
+            if torch.is_tensor(value) or isinstance(value, BatchAugmentationParameters):
                 value = value.to(device)
                 setattr(self, key, value)
         return self
@@ -52,7 +52,7 @@ class AudioDataset(Dataset):
     def __getitem__(self, idx: int) -> Sample:
         audio = self.audio_source[idx]
         audio = audio.resample(self.sample_rate).normalize(-24.0)
-        augmentation_params = self.augmentation.sample_augment_parameters(
+        augmentation_params = self.augmentation.sample_parameters(
             audio=audio,
             generator=torch.Generator().manual_seed(idx),
         )
