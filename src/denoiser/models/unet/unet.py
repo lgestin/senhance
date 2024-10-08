@@ -33,19 +33,26 @@ class ResnetBlock1d(nn.Module):
 class UNET1d(nn.Module):
     def __init__(
         self,
-        in_channels: int,
-        hidden_channels: int,
-        out_channels: int,
+        in_dim: int,
+        dim: int,
+        out_dim: int,
         n_layers: int = 5,
     ):
         super().__init__()
         self.n_layers = n_layers
-        self.t_emb = nn.Linear(1, hidden_channels)
-        self.in_conv = nn.Conv1d(in_channels, hidden_channels, 1)
+
+        t_emb_dim = 4 * dim
+        self.t_emb = nn.Sequential(
+            nn.Linear(dim, t_emb_dim),
+            nn.SiLU(),
+            nn.Linear(t_emb_dim, t_emb_dim),
+        )
+
+        self.in_conv = nn.Conv1d(in_dim, dim, 1)
         encoder = [
             ResnetBlock1d(
-                in_channels=hidden_channels,
-                out_channels=hidden_channels,
+                in_channels=dim,
+                out_channels=dim,
                 dilation=3**i,
             )
             for i in range(2)
@@ -55,8 +62,8 @@ class UNET1d(nn.Module):
 
         decoder = [
             ResnetBlock1d(
-                in_channels=hidden_channels,
-                out_channels=hidden_channels,
+                in_channels=dim,
+                out_channels=dim,
                 dilation=3 ** (2 - i),
             )
             for i in range(2)
@@ -65,14 +72,14 @@ class UNET1d(nn.Module):
         self.decoder = nn.ModuleList(decoder)
         self.out_conv = nn.Sequential(
             nn.SiLU(),
-            nn.Conv1d(hidden_channels, out_channels, 1),
+            nn.Conv1d(dim, out_dim, 1),
         )
         self.cond_conv = nn.Sequential(
-            nn.Conv1d(in_channels, hidden_channels, 1),
+            nn.Conv1d(in_dim, dim, 1),
             nn.SiLU(),
-            nn.Conv1d(hidden_channels, hidden_channels, 3, padding=1),
+            nn.Conv1d(dim, dim, 3, padding=1),
             nn.SiLU(),
-            nn.Conv1d(hidden_channels, 2 * n_layers * hidden_channels, 1),
+            nn.Conv1d(dim, 2 * n_layers * dim, 1),
         )
 
     def forward(

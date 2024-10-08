@@ -1,8 +1,10 @@
+import time
 import torch
 
 from tqdm import tqdm
 from pathlib import Path
 from dataclasses import dataclass
+from collections import defaultdict
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -12,7 +14,7 @@ from denoiser.data.collate import collate
 from denoiser.data.augmentations import BackgroundNoise
 
 from denoiser.models.codec.mimi import MimiCodec
-from denoiser.cfm import ConditionalFlowMatcher
+from denoiser.models.cfm.cfm import ConditionalFlowMatcher
 from denoiser.models.unet.unet import UNET1d
 
 
@@ -25,13 +27,17 @@ class TrainingConfig:
     sigma_0: float = 1.0
     sigma_1: float = 1e-7
 
+    n_dim: int = 1024
+    n_layers: int = 10
+
     sample_rate: int = 24_000  # mimi sample_rate
     sequence_length_s: int = 64 / 12.5
     batch_size: int = 64
-    lr: float = 1e-3
+    lr: float = 3e-4
 
     n_cfm_steps: int = 10
     max_steps: int = 1_000_000
+    val_steps: int = 5_000
     smp_steps: int = 5_000
     n_smp: int = 8
 
@@ -52,6 +58,7 @@ def train(exp_path: str, config: TrainingConfig):
         min_snr=-5,
         max_snr=25,
         min_duration_s=config.sequence_length_s,
+        p=0.8,
     )
     valid_augments = BackgroundNoise(
         noise_index_path=noise_folder / "index.valid.json",
@@ -112,7 +119,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
     test_dloader = DataLoader(
         test_dataset,
-        batch_size=config.batch_size,
+        batch_size=config.n_smp,
         collate_fn=collate,
     )
 
@@ -123,9 +130,10 @@ def train(exp_path: str, config: TrainingConfig):
     codec = torch.compile(codec, disable=not config.nocompile)
 
     unet = UNET1d(
-        in_channels=codec.dim,
-        hidden_channels=codec.dim,
-        out_channels=codec.dim,
+        in_dim=codec.dim,
+        dim=config.n_dim,
+        out_dim=codec.dim,
+        n_layers=config.n_layers,
     )
     unet = unet.to(device)
     unet = torch.compile(unet, disable=not config.nocompile)
@@ -145,8 +153,8 @@ def train(exp_path: str, config: TrainingConfig):
 
         clean = batch.waveforms
         noisy = train_augments.augment(clean, parameters=batch.augmentation_params)
-        with torch.no_grad():
-            with torch.autocast(device_type=device_dtype, enabled=config.noamp):
+        with torch.autocast(device_type=device_dtype, enabled=config.noamp):
+            with torch.no_grad():
                 x_clean = codec.encode(clean)
                 x_noisy = codec.encode(noisy)
 
@@ -155,14 +163,18 @@ def train(exp_path: str, config: TrainingConfig):
             vt, ut = cflow_matcher(t, x_1=x_clean, x_cond=x_noisy)
             loss = torch.nn.functional.mse_loss(vt, ut)
 
-        opt.zero_grad()
-        scaler.scale(loss).backward()
-        scaler.unscale_(opt)
-        grad = torch.nn.utils.clip_grad_norm_(cflow_matcher.parameters(), 1e0)
-        scaler.step(opt)
-        scaler.update()
+        if cflow_matcher.training:
+            opt.zero_grad()
+            scaler.scale(loss).backward()
+            scaler.unscale_(opt)
+            grad = torch.nn.utils.clip_grad_norm_(cflow_matcher.parameters(), 1e0)
+            scaler.step(opt)
+            scaler.update()
 
-        return {"loss": loss.item(), "grad": grad}
+        metrics = {"loss": loss.item()}
+        if cflow_matcher.training:
+            metrics["grad"] = grad
+        return metrics
 
     @torch.inference_mode()
     def sample(batch):
@@ -182,14 +194,19 @@ def train(exp_path: str, config: TrainingConfig):
         )[0]
         with torch.no_grad():
             cleaned = codec.decode(x_cleaned)
-        return cleaned
+        return noisy, cleaned
 
-    smp_batch = next(iter(test_dloader))
+    smp_batch = next(iter(test_dloader)).to(device)
     writer = SummaryWriter(exp_path)
     pbar = tqdm(total=config.max_steps)
-    for i, (clean, noisy) in enumerate(zip(smp_batch.waveforms, smp_batch.noisy)):
-        writer.add_audio(f"smp/{i}.clean.wav", clean, 0, sr)
-        writer.add_audio(f"smp/{i}.noisy.wav", noisy, 0, sr)
+    for i, (clean, noise) in enumerate(
+        zip(smp_batch.waveforms, smp_batch.augmentation_params.noise)
+    ):
+        with torch.no_grad():
+            reconstructed = codec.reconstruct(clean[None])[0]
+        writer.add_audio(f"0clean/{i}.wav", clean, 0, sr)
+        writer.add_audio(f"1noise/{i}.wav", noise, 0, sr)
+        writer.add_audio(f"2reconstructed/{i}.wav", reconstructed, 0, sr)
 
     step = 0
     while 1:
@@ -197,9 +214,22 @@ def train(exp_path: str, config: TrainingConfig):
 
             if step % config.smp_steps == 0:
                 cflow_matcher.eval()
-                cleaned = sample(smp_batch)
-                for i, y_hat in enumerate(cleaned):
-                    writer.add_audio(f"smp/{i}.cleaned.wav", y_hat, step, sr)
+                noisy, cleaned = sample(smp_batch)
+                for i, (x, y_hat) in enumerate(zip(noisy, cleaned)):
+                    writer.add_audio(f"3.noisy/{i}.wav", x, step, sr)
+                    writer.add_audio(f"4cleaned/{i}.wav", y_hat, step, sr)
+
+            if step % config.val_steps == 0:
+                torch.save(
+                    cflow_matcher.state_dict(),
+                    Path(exp_path) / f"checkpoint.{step}.pt",
+                )
+                # cflow_matcher.eval()
+                # val_metrics = defaultdict(list)
+                # for vbatch in valid_dloader:
+                #     metrics = process_batch(vbatch)
+                #     for key, value in metrics.items():
+                #         val_metrics += [value]
 
             cflow_matcher.train()
             metrics = process_batch(batch)
@@ -213,6 +243,7 @@ def train(exp_path: str, config: TrainingConfig):
             if step >= config.max_steps:
                 pbar.close()
                 return
+            t = time.perf_counter()
 
 
 if __name__ == "__main__":
