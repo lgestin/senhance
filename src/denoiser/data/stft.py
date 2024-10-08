@@ -50,8 +50,8 @@ class MelSpectrogram(STFT):
 
         melscale_fbanks = torchaudio.functional.melscale_fbanks(
             n_freqs=n_fft // 2 + 1,
-            f_min=0.0,
-            f_max=sample_rate // 2,
+            f_min=max(f_min, 0.0),
+            f_max=min(f_max, sample_rate // 2),
             n_mels=n_mels,
             norm="slaney",
             mel_scale="htk",
