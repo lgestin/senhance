@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 
 from abc import abstractmethod
+from dataclasses import dataclass
 
+from denoiser.models.unet.attention import SelfAttention
 from denoiser.models.cfm.utils import timestep_embedding
 
 
@@ -28,7 +30,13 @@ class TimestepAwareSequential(nn.Sequential, TimestepAwareModule):
 
 
 class ResnetBlock1d(TimestepAwareModule):
-    def __init__(self, in_channels: int, out_channels: int, dilation: int = 1):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        dilation: int = 1,
+        attn: bool = False,
+    ):
         super().__init__()
         self.convs = nn.Sequential(
             nn.GroupNorm(32, in_channels),
@@ -49,63 +57,71 @@ class ResnetBlock1d(TimestepAwareModule):
                 padding=1,
             ),
         )
+        if attn:
+            attn = SelfAttention(out_channels)
+        self.attn = attn
 
     def forward(self, x_t: torch.FloatTensor, t_emb: torch.FloatTensor):
         x_t = x_t + self.convs(x_t + t_emb)
+        if self.attn:
+            x_t = x_t + self.attn(x_t)
         return x_t
 
 
-class UNET1d(nn.Module):
-    def __init__(
-        self,
-        in_dim: int,
-        dim: int,
-        out_dim: int,
-        n_layers: int = 5,
-    ):
-        super().__init__()
-        self.n_layers = n_layers
-        self.dim = dim
+@dataclass
+class UNET1dDims:
+    in_dim: int
+    dim: int
+    out_dim: int
+    n_layers: int
 
-        t_emb_dim = 4 * dim
+
+class UNET1d(nn.Module):
+    def __init__(self, dims: UNET1dDims):
+        super().__init__()
+        self.dims = dims
+
+        t_emb_dim = 4 * dims.dim
         self.t_emb = nn.Sequential(
-            nn.Linear(dim, t_emb_dim),
+            nn.Linear(dims.dim, t_emb_dim),
             nn.SiLU(inplace=True),
-            nn.Linear(t_emb_dim, dim),
+            nn.Linear(t_emb_dim, dims.dim),
         )
 
-        self.in_conv = nn.Conv1d(in_dim, dim, 1)
+        self.in_conv = nn.Conv1d(dims.in_dim, dims.dim, 1)
         encoder = [
             ResnetBlock1d(
-                in_channels=dim,
-                out_channels=dim,
+                in_channels=dims.dim,
+                out_channels=dims.dim,
                 dilation=3**i,
+                attn=j >= dims.n_layers - 1,
             )
             for i in range(2)
-            for _ in range(n_layers)
+            for j in range(dims.n_layers)
         ]
         self.encoder = nn.ModuleList(encoder)
 
         decoder = [
             ResnetBlock1d(
-                in_channels=dim,
-                out_channels=dim,
+                in_channels=dims.dim,
+                out_channels=dims.dim,
                 dilation=3 ** (2 - i),
+                attn=j < 1,
             )
             for i in range(2)
-            for _ in range(n_layers)
+            for j in range(dims.n_layers)
         ]
         self.decoder = nn.ModuleList(decoder)
         self.out_conv = nn.Sequential(
             nn.SiLU(inplace=True),
-            nn.Conv1d(dim, out_dim, 1),
+            nn.Conv1d(dims.dim, dims.out_dim, 1),
         )
         self.cond_conv = nn.Sequential(
-            nn.Conv1d(in_dim, dim, 1),
+            nn.Conv1d(dims.in_dim, dims.dim, 1),
             nn.SiLU(inplace=True),
-            nn.Conv1d(dim, dim, 3, padding=1),
+            nn.Conv1d(dims.dim, dims.dim, 3, padding=1),
             nn.SiLU(inplace=True),
-            nn.Conv1d(dim, 2 * n_layers * dim, 1),
+            nn.Conv1d(dims.dim, 2 * dims.n_layers * dims.dim, 1),
         )
 
     def forward(
@@ -114,17 +130,18 @@ class UNET1d(nn.Module):
         x_cond: torch.LongTensor,
         timestep: torch.FloatTensor,
     ):
-        t_emb = timestep_embedding(timestep, self.dim)
+        t_emb = timestep_embedding(timestep, self.dims.dim)
         t_emb = t_emb.unsqueeze(-1).repeat(1, 1, x_t.size(-1))
         t_emb = self.t_emb(t_emb.transpose(1, 2)).transpose(1, 2)
 
-        x_cond = self.cond_conv(x_cond).chunk(2 * self.n_layers, dim=1)
+        x_cond = self.cond_conv(x_cond).chunk(2 * self.dims.n_layers, dim=1)
         x_t = self.in_conv(x_t)
 
         skips = []
-        enc_conds, dec_conds = x_cond[: self.n_layers], x_cond[self.n_layers :]
+        enc_conds = x_cond[: self.dims.n_layers]
+        dec_conds = x_cond[self.dims.n_layers :]
         for layer, enc_cond, dec_cond in zip(self.encoder, enc_conds, dec_conds):
-            x = (x_t + enc_cond) / 3
+            x = (x_t + enc_cond) / 2
             x_t = layer(x, t_emb=t_emb)
             skips += [x_t + dec_cond]
 
