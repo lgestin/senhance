@@ -37,6 +37,10 @@ class Audio:
         self.end_s = end_s
         self._loudness = None
 
+    def to(self, device: str | torch.device):
+        self._waveform = self.waveform.to(device)
+        return self
+
     @property
     def sample_rate(self):
         if self._sample_rate is None:
