@@ -31,76 +31,36 @@ class ResnetBlock1d(nn.Module):
 
 
 class UNET1d(nn.Module):
-    def __init__(self, in_channels: int, hidden_channels: int, out_channels: int):
+    def __init__(
+        self,
+        in_channels: int,
+        hidden_channels: int,
+        out_channels: int,
+        n_layers: int = 5,
+    ):
         super().__init__()
-        self.y_emb = None
+        self.n_layers = n_layers
         self.t_emb = nn.Linear(1, hidden_channels)
         self.in_conv = nn.Conv1d(in_channels, hidden_channels, 1)
         encoder = [
             ResnetBlock1d(
                 in_channels=hidden_channels,
                 out_channels=hidden_channels,
-                dilation=1,
-            ),
-            ResnetBlock1d(
-                in_channels=hidden_channels,
-                out_channels=hidden_channels,
-                dilation=3,
-            ),
-            # ResnetBlock1d(
-            #     in_channels=hidden_channels,
-            #     out_channels=hidden_channels,
-            #     dilation=9,
-            # ),
-            ResnetBlock1d(
-                in_channels=hidden_channels,
-                out_channels=hidden_channels,
-                dilation=1,
-            ),
-            ResnetBlock1d(
-                in_channels=hidden_channels,
-                out_channels=hidden_channels,
-                dilation=3,
-            ),
-            # ResnetBlock1d(
-            #     in_channels=hidden_channels,
-            #     out_channels=hidden_channels,
-            #     dilation=9,
-            # ),
+                dilation=3**i,
+            )
+            for i in range(2)
+            for _ in range(n_layers)
         ]
         self.encoder = nn.ModuleList(encoder)
 
         decoder = [
-            # ResnetBlock1d(
-            #     in_channels=hidden_channels,
-            #     out_channels=hidden_channels,
-            #     dilation=9,
-            # ),
             ResnetBlock1d(
                 in_channels=hidden_channels,
                 out_channels=hidden_channels,
-                dilation=3,
-            ),
-            ResnetBlock1d(
-                in_channels=hidden_channels,
-                out_channels=hidden_channels,
-                dilation=1,
-            ),
-            # ResnetBlock1d(
-            #     in_channels=hidden_channels,
-            #     out_channels=hidden_channels,
-            #     dilation=9,
-            # ),
-            ResnetBlock1d(
-                in_channels=hidden_channels,
-                out_channels=hidden_channels,
-                dilation=3,
-            ),
-            ResnetBlock1d(
-                in_channels=hidden_channels,
-                out_channels=hidden_channels,
-                dilation=1,
-            ),
+                dilation=3 ** (2 - i),
+            )
+            for i in range(2)
+            for _ in range(n_layers)
         ]
         self.decoder = nn.ModuleList(decoder)
         self.out_conv = nn.Sequential(
@@ -112,7 +72,7 @@ class UNET1d(nn.Module):
             nn.SiLU(),
             nn.Conv1d(hidden_channels, hidden_channels, 3, padding=1),
             nn.SiLU(),
-            nn.Conv1d(hidden_channels, 8 * hidden_channels, 1),
+            nn.Conv1d(hidden_channels, 2 * n_layers * hidden_channels, 1),
         )
 
     def forward(
@@ -124,8 +84,9 @@ class UNET1d(nn.Module):
         x_t = self.in_conv(x_t)
         skips = []
         t = self.t_emb(t.squeeze(2)).unsqueeze(-1).repeat(1, 1, x_t.size(-1))
-        x_cond = self.cond_conv(x_cond).chunk(8, dim=1)
-        for layer, enc_cond, dec_cond in zip(self.encoder, x_cond[:4], x_cond[4:]):
+        x_cond = self.cond_conv(x_cond).chunk(2 * self.n_layers, dim=1)
+        enc_conds, dec_conds = x_cond[: self.n_layers], x_cond[self.n_layers :]
+        for layer, enc_cond, dec_cond in zip(self.encoder, enc_conds, dec_conds):
             x = (x_t + t + enc_cond) / 3
             x_t = layer(x)
             skips += [x_t + dec_cond]
