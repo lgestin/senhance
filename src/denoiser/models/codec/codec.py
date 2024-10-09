@@ -3,9 +3,11 @@ import torch.nn as nn
 
 
 class Codec(nn.Module):
-    def __init__(self, sample_rate: int):
+    def __init__(self, dim: int, sample_rate: int, resolution_hz: int):
         super().__init__()
+        self.dim = dim
         self.sample_rate = sample_rate
+        self.resolution_hz = resolution_hz
 
     def forward(self, x: torch.Tensor):
         raise NotImplementedError

@@ -10,8 +10,7 @@ from denoiser.models.codec.codec import Codec
 
 class MimiCodec(Codec):
     def __init__(self, safetensors_path: str, device: str | torch.device = "cpu"):
-        super().__init__(sample_rate=24_000)
-        self.dim: int = 512
+        super().__init__(dim=512, sample_rate=24_000, resolution=12.5)
         encoder = SEANetEncoder(**_seanet_kwargs)
         decoder = SEANetDecoder(**_seanet_kwargs)
         encoder_transformer = transformer.ProjectedTransformer(
