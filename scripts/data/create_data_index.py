@@ -25,12 +25,12 @@ def create_data_index(
                 filepath=relative_path.as_posix(),
                 sample_rate=audio.sample_rate,
                 duration_s=audio.duration_s,
-                loudness=audio.loudness,
+                loudness=audio.mono().loudness,
             )
         return info
 
     with ThreadPoolExecutor(n_workers) as executor:
-        files = list(data_folder.glob("**/*.wav"))
+        files = list(data_folder.rglob("*.wav"))
         infos = executor.map(extract_informations, files)
         index = list(tqdm(infos, total=len(files)))
     index = [asdict(i) for i in index if i is not None]
