@@ -30,7 +30,7 @@ class TrainingConfig:
     n_layers: int = 10
 
     sample_rate: int = 24_000  # mimi sample_rate
-    sequence_length_s: int = 64 / 12.5
+    sequence_length_n_tokens: int = 64
     batch_size: int = 64
     lr: float = 3e-4
 
@@ -47,6 +47,7 @@ class TrainingConfig:
 
 @dataclass
 class Checkpoint:
+    codec: str
     step: int
     best_loss: float
     model: dict[str, torch.Tensor]
@@ -73,26 +74,34 @@ def train(exp_path: str, config: TrainingConfig):
     device = torch.device(device)
     device_dtype = device.type
 
+    # CODEC
+    codec = MimiCodec(safetensors_path=config.codec_path)
+    codec = codec.eval()
+    codec = codec.freeze()
+    codec = codec.to(device)
+    codec = torch.compile(codec, disable=not config.nocompile)
+
     ### AUGMENTS
+    sequence_length_s = config.sequence_length_n_tokens / codec.resolution_hz
     noise_folder = Path(config.noise_folder)
     train_augments = BackgroundNoise(
         noise_index_path=noise_folder / "index.train.json",
         min_snr=5,
         max_snr=30,
-        min_duration_s=config.sequence_length_s,
+        min_duration_s=sequence_length_s,
         p=0.8,
     )
     valid_augments = BackgroundNoise(
         noise_index_path=noise_folder / "index.valid.json",
         min_snr=5,
         max_snr=30,
-        min_duration_s=config.sequence_length_s,
+        min_duration_s=sequence_length_s,
     )
     test_augments = BackgroundNoise(
         noise_index_path=noise_folder / "index.test.json",
         min_snr=5,
         max_snr=30,
-        min_duration_s=config.sequence_length_s,
+        min_duration_s=sequence_length_s,
     )
 
     # SPEECH
@@ -100,7 +109,7 @@ def train(exp_path: str, config: TrainingConfig):
     speech_folder = Path(config.speech_folder)
     train_audio_source = AudioSource(
         speech_folder / "index.train.json",
-        sequence_length_s=config.sequence_length_s,
+        sequence_length_s=sequence_length_s,
     )
     train_dataset = AudioDataset(
         train_audio_source,
@@ -117,7 +126,7 @@ def train(exp_path: str, config: TrainingConfig):
 
     valid_audio_source = AudioSource(
         speech_folder / "index.valid.json",
-        sequence_length_s=config.sequence_length_s,
+        sequence_length_s=sequence_length_s,
     )
     valid_dataset = AudioDataset(
         valid_audio_source,
@@ -132,7 +141,7 @@ def train(exp_path: str, config: TrainingConfig):
 
     test_audio_source = AudioSource(
         speech_folder / "index.test.json",
-        sequence_length_s=config.sequence_length_s,
+        sequence_length_s=sequence_length_s,
     )
     test_dataset = AudioDataset(
         test_audio_source,
@@ -144,12 +153,6 @@ def train(exp_path: str, config: TrainingConfig):
         batch_size=config.n_smp,
         collate_fn=collate,
     )
-
-    codec = MimiCodec(safetensors_path=config.codec_path)
-    codec = codec.eval()
-    codec = codec.freeze()
-    codec = codec.to(device)
-    codec = torch.compile(codec, disable=not config.nocompile)
 
     unet_dims = UNET1dDims(
         in_dim=codec.dim,
@@ -262,6 +265,7 @@ def train(exp_path: str, config: TrainingConfig):
                     writer.add_scalar(f"valid/{key}", values, step)
 
                 checkpoint = Checkpoint(
+                    codec=codec.__class__.__name__,
                     step=step,
                     best_loss=best_loss,
                     model=cflow_matcher.state_dict(),
