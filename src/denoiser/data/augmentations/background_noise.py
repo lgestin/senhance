@@ -16,6 +16,7 @@ from denoiser.data.utils import truncated_normal
 @dataclass
 class BackgroundNoiseParameters:
     apply: torch.BoolTensor
+    noise_filepath: str
     noise: torch.FloatTensor
     snr: torch.FloatTensor
     clean_loudness: torch.FloatTensor
@@ -76,12 +77,14 @@ class BackgroundNoise(Augmentation):
 
         return BackgroundNoiseParameters(
             apply=apply,
+            noise_filepath=noise.filepath,
             noise=noise.waveform,
             snr=snr,
             clean_loudness=clean_loudness,
             noise_loudness=noise_loudness,
         )
 
+    @torch.inference_mode()
     def augment(
         self,
         waveform: torch.FloatTensor,

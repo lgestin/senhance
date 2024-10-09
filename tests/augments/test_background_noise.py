@@ -1,10 +1,8 @@
 import torch
 
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations.background_noise import (
-    BackgroundNoise,
-    BatchAugmentationParameters,
-)
+from denoiser.data.augmentations.background_noise import BackgroundNoise
+from denoiser.data.augmentations.augmentations import BatchAugmentationParameters
 
 
 def test_background_noise():
@@ -17,7 +15,7 @@ def test_background_noise():
         p=0.5,
     )
 
-    excerpts = [audio.salient_excerpt(0.5, generator=generator) for _ in range(8)]
+    excerpts = [audio.random_excerpt(0.5, generator=generator) for _ in range(8)]
     waveforms = torch.stack([excerpt.waveform for excerpt in excerpts])
 
     augment_params = [
