@@ -20,7 +20,7 @@ class AudioInfo:
 class Audio:
     def __init__(
         self,
-        filepath: str = None,
+        filepath: str = "",
         waveform: torch.Tensor = None,
         sample_rate: int = None,
         start_s: float = 0,
@@ -122,11 +122,15 @@ class Audio:
         audio._loudness = audioinfo.loudness
         return audio
 
-    def excerpt(self, offset_s: float, duration_s: float):
+    def excerpt(self, offset_s: float, duration_s: float = None):
         waveform = self._waveform
         if waveform is not None:
             start = int(offset_s * self.sample_rate)
-            end = start + int(duration_s * self.sample_rate)
+            if duration_s is not None:
+                end = start + int(duration_s * self.sample_rate)
+            else:
+                duration_s = self.duration_s - offset_s
+                end = waveform.shape[-1]
             waveform = waveform[..., start:end]
         sample_rate = self._sample_rate
 
