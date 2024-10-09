@@ -9,8 +9,8 @@ from denoiser.data.augmentations.augmentations import (
 )
 
 
-@dataclass
-class ChainParameters:
+@dataclass(kw_only=True)
+class ChainParameters(AugmentationParameters):
     apply: torch.BoolTensor
     params: list[AugmentationParameters]
 
@@ -47,5 +47,6 @@ class Chain(Augmentation):
         for augmentation, params in zip(
             self.augmentations, parameters.params, strict=True
         ):
+            params.apply = params.apply & parameters.apply
             waveform = augmentation.augment(waveform=waveform, parameters=params)
         return waveform
