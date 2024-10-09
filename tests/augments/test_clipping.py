@@ -1,8 +1,8 @@
 import torch
 
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations.clipping import Clipping
 from denoiser.data.augmentations.augmentations import BatchAugmentationParameters
+from denoiser.data.augmentations.clipping import Clipping
 
 
 def test_clipping():

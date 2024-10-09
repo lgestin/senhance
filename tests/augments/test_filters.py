@@ -1,8 +1,8 @@
 import torch
 
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations.filters import LowPass, HighPass, BandPassChain
 from denoiser.data.augmentations.augmentations import BatchAugmentationParameters
+from denoiser.data.augmentations.filters import BandPassChain, HighPass, LowPass
 
 
 def test_lowpass():

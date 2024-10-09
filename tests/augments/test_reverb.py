@@ -1,8 +1,8 @@
 import torch
 
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations.reverb import Reverb
 from denoiser.data.augmentations.augmentations import BatchAugmentationParameters
+from denoiser.data.augmentations.reverb import Reverb
 
 
 def test_reverb():
