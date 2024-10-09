@@ -44,7 +44,7 @@ class MelSpectrogram(STFT):
         n_mels: int,
         sample_rate: int,
         f_min: float = 0.0,
-        f_max: float = None,
+        f_max: float = torch.inf,
     ):
         super().__init__(n_fft=n_fft, hop_length=hop_length)
 
