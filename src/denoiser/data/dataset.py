@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import torch
 from torch.utils.data import Dataset
@@ -27,11 +27,11 @@ class Batch:
     augmentation_params: BatchAugmentationParameters
 
     def to(self, device: str | torch.device):
-        for key in self.__annotations__.keys():
-            value = getattr(self, key)
+        for field in fields(self):
+            value = getattr(self, field.name)
             if torch.is_tensor(value) or isinstance(value, BatchAugmentationParameters):
                 value = value.to(device)
-                setattr(self, key, value)
+                setattr(self, field.name, value)
         return self
 
 

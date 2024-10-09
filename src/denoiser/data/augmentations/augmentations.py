@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import torch
 
@@ -21,22 +21,31 @@ class BatchAugmentationParameters:
 
     def collate(self, parameters: list[AugmentationParameters]):
         assert all(isinstance(param, type(parameters[0])) for param in parameters)
-        for attr in parameters[0].__annotations__.keys():
-            values = [getattr(param, attr) for param in parameters]
+        for field in fields(parameters[0]):
+            values = [getattr(param, field.name) for param in parameters]
             if torch.is_tensor(values[0]):
                 batch = torch.stack(values)
-            setattr(self, attr, batch)
+            elif isinstance(values[0], (int, float, bool)):
+                batch = torch.as_tensor(values)
+            elif isinstance(values[0], str):
+                batch = values
+            else:
+                batch = []
+                for i in range(len(values[0])):
+                    value = [val[i] for val in values]
+                    batch.append(BatchAugmentationParameters(value))
+            setattr(self, field.name, batch)
         return self
 
     def __getitem__(self, idx: int):
         return self._parameters[idx]
 
     def to(self, device: str | torch.device):
-        for key in self._parameters[0].__annotations__.keys():
-            value = getattr(self, key)
+        for field in fields(self._parameters[0]):
+            value = getattr(self, field.name)
             if torch.is_tensor(value):
                 value = value.to(device)
-                setattr(self, key, value)
+                setattr(self, field.name, value)
         return self
 
 

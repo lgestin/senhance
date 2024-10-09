@@ -1,6 +1,6 @@
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 import torch
@@ -57,7 +57,7 @@ class Checkpoint:
 
     def save(self, path: str):
         def save():
-            torch.save({k: getattr(self, k) for k in self.__annotations__.keys()}, path)
+            torch.save({k: getattr(self, k.name) for k in fields(self)}, path)
 
         self.executor.submit(save)
 
