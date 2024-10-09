@@ -4,7 +4,7 @@ from denoiser.models.codec.codec import Codec
 
 
 class DescriptAudioCodec(Codec):
-    def __init__(self, path: str, device: str | torch.device):
+    def __init__(self, path: str, device: str | torch.device = "cpu"):
         super().__init__(dim=1024, sample_rate=24_000, resolution_hz=75)
         self.dac = DAC.load(path)
         self.dac.eval()

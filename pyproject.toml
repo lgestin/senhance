@@ -35,7 +35,7 @@ dependencies = [
   "tensorboard",
   "simple-parsing",
   "moshi",
-  "descript-audiotools @ git+https://github.com/descriptinc/audiotools",
+  "descript-audio-codec",
 ]
 
 [tool.hatch.envs.dev]
