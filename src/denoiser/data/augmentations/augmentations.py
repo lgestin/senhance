@@ -33,10 +33,7 @@ class BatchAugmentationParameters:
             elif isinstance(values[0], str):
                 batch = values
             else:
-                batch = []
-                for i in range(len(values[0])):
-                    value = [val[i] for val in values]
-                    batch.append(BatchAugmentationParameters(value))
+                raise TypeError
             setattr(self, field.name, batch)
 
     def __getitem__(self, idx: int | torch.BoolTensor):
@@ -47,7 +44,7 @@ class BatchAugmentationParameters:
             parameters = [
                 param for param, apply in zip(self._parameters, idx) if apply.item()
             ]
-            item = BatchAugmentationParameters(parameters=parameters)
+            item = self.__class__(parameters=parameters)
         return item
 
     def to(self, device: str | torch.device):
@@ -57,6 +54,10 @@ class BatchAugmentationParameters:
                 value = value.to(device)
                 setattr(self, field.name, value)
         return self
+
+    @property
+    def size(self):
+        return len(self._parameters)
 
 
 class Augmentation:
