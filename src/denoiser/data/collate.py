@@ -1,6 +1,5 @@
 import torch
 
-from denoiser.data.augmentations.augmentations import BatchAugmentationParameters
 from denoiser.data.dataset import Batch, Sample
 
 
@@ -8,9 +7,11 @@ def collate(samples: list[Sample]) -> Batch:
     idxs = [sample.idx for sample in samples]
     audios = [sample.audio for sample in samples]
     waveforms = torch.stack([audio.waveform for audio in audios])
-    augmentation_params = samples[0].augmentation_params.batch(
-        [sample.augmentation_params for sample in samples]
-    )
+    augmentation_params = samples[0].augmentation_params
+    if augmentation_params is not None:
+        augmentation_params = augmentation_params.batch(
+            [sample.augmentation_params for sample in samples]
+        )
     return Batch(
         idxs=idxs,
         audios=audios,

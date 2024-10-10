@@ -9,13 +9,16 @@ class Codec(nn.Module):
         self.sample_rate = sample_rate
         self.resolution_hz = resolution_hz
 
-    def forward(self, x: torch.Tensor):
-        raise NotImplementedError
-
     def encode(self, x: torch.Tensor):
         raise NotImplementedError
 
-    def decode(self, x: torch.Tensor):
+    def decode(self, z: torch.Tensor):
+        raise NotImplementedError
+
+    def normalize(self, z: torch.Tensor):
+        raise NotImplementedError
+
+    def unnormalize(self, z: torch.Tensor):
         raise NotImplementedError
 
     def reconstruct(self, x: torch.Tensor):

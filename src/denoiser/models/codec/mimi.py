@@ -51,3 +51,9 @@ class MimiCodec(Codec):
         encoded = self.mimi.encode(x)
         decoded = self.mimi.decode(encoded)
         return decoded
+
+    def normalize(self, z):
+        return z / 0.06
+
+    def unnormalize(self, z):
+        return 0.06 * z

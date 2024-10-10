@@ -13,11 +13,17 @@ class DescriptAudioCodec(Codec):
     def encode(self, x: torch.Tensor):
         return self.dac.encoder(x)
 
-    def decode(self, x: torch.Tensor):
-        quantized = self.dac.quantizer(x)[0]
+    def decode(self, z: torch.Tensor):
+        quantized = self.dac.quantizer(z)[0]
         return self.dac.decode(quantized)
 
     def reconstruct(self, x):
         encoded = self.dac.encode(x)[0]
         decoded = self.dac.decode(encoded)
         return decoded
+
+    def normlize(self, z):
+        return z / 3.5
+
+    def unnormlize(self, z):
+        return 3.5 * z

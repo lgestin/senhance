@@ -8,12 +8,12 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from denoiser.data.augmentations.augmentations import BackgroundNoise
+from denoiser.data.augmentations.default import get_default_augmentation
 from denoiser.data.collate import collate
 from denoiser.data.dataset import AudioDataset
 from denoiser.data.source import AudioSource
 from denoiser.models.cfm.cfm import ConditionalFlowMatcher
-from denoiser.models.codec.mimi import MimiCodec
+from denoiser.models.codec.dac import DescriptAudioCodec
 from denoiser.models.unet.unet import UNET1d, UNET1dDims
 
 
@@ -75,7 +75,7 @@ def train(exp_path: str, config: TrainingConfig):
     device_dtype = device.type
 
     # CODEC
-    codec = MimiCodec(safetensors_path=config.codec_path)
+    codec = DescriptAudioCodec(path=config.codec_path)
     codec = codec.eval()
     codec = codec.freeze()
     codec = codec.to(device)
@@ -83,25 +83,14 @@ def train(exp_path: str, config: TrainingConfig):
 
     ### AUGMENTS
     sequence_length_s = config.sequence_length_n_tokens / codec.resolution_hz
-    noise_folder = Path(config.noise_folder)
-    train_augments = BackgroundNoise(
-        noise_index_path=noise_folder / "index.train.json",
-        min_snr=5,
-        max_snr=30,
-        min_duration_s=sequence_length_s,
-        p=0.8,
+    train_augments = get_default_augmentation(
+        sequence_length_s=sequence_length_s, split="train", p=0.95
     )
-    valid_augments = BackgroundNoise(
-        noise_index_path=noise_folder / "index.valid.json",
-        min_snr=5,
-        max_snr=30,
-        min_duration_s=sequence_length_s,
+    valid_augments = get_default_augmentation(
+        sequence_length_s=sequence_length_s, split="valid", p=0.95
     )
-    test_augments = BackgroundNoise(
-        noise_index_path=noise_folder / "index.test.json",
-        min_snr=5,
-        max_snr=30,
-        min_duration_s=sequence_length_s,
+    test_augments = get_default_augmentation(
+        sequence_length_s=sequence_length_s, split="test", p=1.0
     )
 
     # SPEECH
@@ -181,8 +170,8 @@ def train(exp_path: str, config: TrainingConfig):
         noisy = train_augments.augment(clean, parameters=batch.augmentation_params)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             with torch.no_grad():
-                x_clean = codec.encode(clean)
-                x_noisy = codec.encode(noisy)
+                x_clean = codec.normalize(codec.encode(clean))
+                x_noisy = codec.normalize(codec.encode(noisy))
 
         timestep = torch.rand((clean.shape[0],), device=device)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
@@ -214,7 +203,7 @@ def train(exp_path: str, config: TrainingConfig):
             clean, parameters=batch.augmentation_params
         ).clone()
         with torch.no_grad():
-            x_noisy = codec.encode(noisy)
+            x_noisy = codec.normalize(codec.encode(noisy))
 
         x_0 = cflow_matcher.sigma_0 * torch.randn_like(x_noisy)
         timesteps = torch.linspace(0, 1, config.n_cfm_steps).tolist()
@@ -224,7 +213,7 @@ def train(exp_path: str, config: TrainingConfig):
             timesteps=timesteps,
         )
         with torch.no_grad():
-            cleaned = codec.decode(x_cleaned)
+            cleaned = codec.decode(codec.unnormalize(x_cleaned))
         return noisy, cleaned
 
     smp_batch = next(iter(test_dloader)).to(device)
