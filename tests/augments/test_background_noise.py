@@ -32,6 +32,15 @@ def test_background_noise():
     for wav, aug in zip(waveforms[~apply], augmented[~apply]):
         assert torch.allclose(wav, aug)
 
+    excerpt = excerpts[0]
+    augment_params = augment.sample_parameters(excerpt, generator=generator)
+    augmented = augment.augment(excerpt.waveform[None], augment_params)
+    assert torch.is_tensor(augmented)
+    if augment_params.apply:
+        assert not torch.allclose(augmented, excerpt.waveform[None])
+    else:
+        assert torch.allclose(augmented, excerpt.waveform[None])
+
 
 if __name__ == "__main__":
     test_background_noise()

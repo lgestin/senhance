@@ -16,7 +16,7 @@ def test_lowpass():
     augment_params = [
         augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
     ]
-    augment_params = BatchAugmentationParameters(augment_params)
+    augment_params = augment_params[0].batch(augment_params)
 
     augmented = augment.augment(waveforms, augment_params)
     assert torch.is_tensor(augmented)
@@ -26,6 +26,15 @@ def test_lowpass():
         assert not torch.allclose(wav, aug)
     for wav, aug in zip(waveforms[~apply], augmented[~apply]):
         assert torch.allclose(wav, aug)
+
+    excerpt = excerpts[0]
+    augment_params = augment.sample_parameters(excerpt, generator=generator)
+    augmented = augment.augment(excerpt.waveform[None], augment_params)
+    assert torch.is_tensor(augmented)
+    if augment_params.apply:
+        assert not torch.allclose(augmented, excerpt.waveform[None])
+    else:
+        assert torch.allclose(augmented, excerpt.waveform[None])
 
 
 def test_highpass():
@@ -39,7 +48,7 @@ def test_highpass():
     augment_params = [
         augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
     ]
-    augment_params = BatchAugmentationParameters(augment_params)
+    augment_params = augment_params[0].batch(augment_params)
 
     augmented = augment.augment(waveforms, augment_params)
     assert torch.is_tensor(augmented)
@@ -49,6 +58,15 @@ def test_highpass():
         assert not torch.allclose(wav, aug)
     for wav, aug in zip(waveforms[~apply], augmented[~apply]):
         assert torch.allclose(wav, aug)
+
+    excerpt = excerpts[0]
+    augment_params = augment.sample_parameters(excerpt, generator=generator)
+    augmented = augment.augment(excerpt.waveform[None], augment_params)
+    assert torch.is_tensor(augmented)
+    if augment_params.apply:
+        assert not torch.allclose(augmented, excerpt.waveform[None])
+    else:
+        assert torch.allclose(augmented, excerpt.waveform[None])
 
 
 def test_bandpass():
@@ -62,7 +80,7 @@ def test_bandpass():
     augment_params = [
         augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
     ]
-    augment_params = BatchAugmentationParameters(augment_params)
+    augment_params = augment_params[0].batch(augment_params)
 
     augmented = augment.augment(waveforms, augment_params)
     assert torch.is_tensor(augmented)
@@ -72,6 +90,15 @@ def test_bandpass():
         assert not torch.allclose(wav, aug)
     for wav, aug in zip(waveforms[~apply], augmented[~apply]):
         assert torch.allclose(wav, aug)
+
+    excerpt = excerpts[0]
+    augment_params = augment.sample_parameters(excerpt, generator=generator)
+    augmented = augment.augment(excerpt.waveform[None], augment_params)
+    assert torch.is_tensor(augmented)
+    if augment_params.apply:
+        assert not torch.allclose(augmented, excerpt.waveform[None])
+    else:
+        assert torch.allclose(augmented, excerpt.waveform[None])
 
 
 if __name__ == "__main__":

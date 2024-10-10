@@ -22,7 +22,6 @@ def test_choose():
         augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
     ]
     augment_params = augment_params[0].batch(augment_params)
-    # augment_params = BatchAugmentationParameters(augment_params)
 
     augmented = augment.augment(waveforms, augment_params)
     assert torch.is_tensor(augmented)
@@ -32,6 +31,15 @@ def test_choose():
         assert not torch.allclose(wav, aug)
     for wav, aug in zip(waveforms[~apply], augmented[~apply]):
         assert torch.allclose(wav, aug)
+
+    excerpt = excerpts[0]
+    augment_params = augment.sample_parameters(excerpt, generator=generator)
+    augmented = augment.augment(excerpt.waveform[None], augment_params)
+    assert torch.is_tensor(augmented)
+    if augment_params.apply:
+        assert not torch.allclose(augmented, excerpt.waveform[None])
+    else:
+        assert torch.allclose(augmented, excerpt.waveform[None])
 
 
 if __name__ == "__main__":
