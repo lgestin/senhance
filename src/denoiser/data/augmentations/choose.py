@@ -66,6 +66,12 @@ class Choose(Augmentation):
 
         self.augmentations = augmentations
 
+    def __getitem__(self, idx: int):
+        return self.augmentations[idx]
+
+    def __len__(self):
+        return len(self.augmentations)
+
     def sample_parameters(
         self,
         audio: Audio,
