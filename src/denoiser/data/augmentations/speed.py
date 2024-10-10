@@ -4,11 +4,15 @@ import torch
 import torchaudio.functional as F
 
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import Augmentation
+from denoiser.data.augmentations.augmentations import (
+    Augmentation,
+    AugmentationParameters,
+    BatchAugmentationParameters,
+)
 
 
-@dataclass
-class SpeedParameters:
+@dataclass(kw_only=True)
+class SpeedParameters(AugmentationParameters):
     apply: torch.BoolTensor
     factor: torch.FloatTensor
     sample_rate: torch.FloatTensor
@@ -44,8 +48,10 @@ class Speed(Augmentation):
     def augment(
         self,
         waveform: torch.FloatTensor,
-        parameters: SpeedParameters,
+        parameters: SpeedParameters | BatchAugmentationParameters,
     ) -> torch.FloatTensor:
+        if isinstance(parameters, AugmentationParameters):
+            parameters = parameters.batch([parameters])
 
         if not torch.any(parameters.apply):
             return waveform

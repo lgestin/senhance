@@ -4,11 +4,15 @@ import torch
 import torchaudio.functional as F
 
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import Augmentation
+from denoiser.data.augmentations.augmentations import (
+    Augmentation,
+    AugmentationParameters,
+    BatchAugmentationParameters,
+)
 
 
-@dataclass
-class PhaserParameters:
+@dataclass(kw_only=True)
+class PhaserParameters(AugmentationParameters):
     apply: torch.BoolTensor
     sample_rate: torch.FloatTensor
     gain_in: torch.FloatTensor
@@ -103,8 +107,10 @@ class Phaser(Augmentation):
     def augment(
         self,
         waveform: torch.FloatTensor,
-        parameters: PhaserParameters,
+        parameters: PhaserParameters | BatchAugmentationParameters,
     ) -> torch.FloatTensor:
+        if isinstance(parameters, AugmentationParameters):
+            parameters = parameters.batch([parameters])
 
         if not torch.any(parameters.apply):
             return waveform

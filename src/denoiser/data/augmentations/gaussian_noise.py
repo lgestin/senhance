@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 import torch
-import torchaudio.functional as F
 
 from denoiser.data.audio import Audio
 from denoiser.data.augmentations.augmentations import (
@@ -12,30 +11,41 @@ from denoiser.data.augmentations.augmentations import (
 
 
 @dataclass(kw_only=True)
-class DitherParameters(AugmentationParameters):
+class GaussianNoiseParameters(AugmentationParameters):
     apply: torch.BoolTensor
-    density_function: str
+    amplitude: torch.FloatTensor
 
 
-class Dither(Augmentation):
-    def __init__(self, density_function: str = "TPDF", p: float = 1.0):
+class GaussianNoise(Augmentation):
+    def __init__(
+        self,
+        min_amplitude: float,
+        max_amplitude: float,
+        p: float = 1.0,
+    ):
         super().__init__(p=p)
-        self.density_function = density_function
+
+        self.min_amplitude = min_amplitude
+        self.max_amplitude = max_amplitude
 
     def sample_parameters(
         self,
         audio: Audio,
         generator: torch.Generator = None,
-    ) -> DitherParameters:
+    ) -> GaussianNoiseParameters:
         apply = torch.rand(tuple(), generator=generator) <= self.p
-        density_function = self.density_function
-        return DitherParameters(apply=apply, density_function=density_function)
+        amplitude = (
+            torch.rand(tuple(), generator=generator)
+            * (self.max_amplitude - self.min_amplitude)
+            + self.min_amplitude
+        )
+        return GaussianNoiseParameters(apply=apply, amplitude=amplitude)
 
     @torch.inference_mode()
     def augment(
         self,
         waveform: torch.FloatTensor,
-        parameters: DitherParameters | BatchAugmentationParameters,
+        parameters: GaussianNoiseParameters | BatchAugmentationParameters,
     ) -> torch.FloatTensor:
         if isinstance(parameters, AugmentationParameters):
             parameters = parameters.batch([parameters])
@@ -44,11 +54,6 @@ class Dither(Augmentation):
             return waveform
 
         apply = parameters.apply
-        density_function = parameters.density_function[0]
-
         augmented = waveform.clone()
-        augmented[apply] = F.dither(
-            waveform=augmented[apply],
-            density_function=density_function,
-        )
+        augmented[apply] = parameters.amplitude[apply].view(-1, 1, 1) * augmented[apply]
         return augmented

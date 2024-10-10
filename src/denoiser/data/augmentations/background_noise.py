@@ -8,13 +8,14 @@ import torch
 from denoiser.data.audio import Audio, AudioInfo
 from denoiser.data.augmentations.augmentations import (
     Augmentation,
+    AugmentationParameters,
     BatchAugmentationParameters,
 )
 from denoiser.data.utils import truncated_normal
 
 
-@dataclass
-class BackgroundNoiseParameters:
+@dataclass(kw_only=True)
+class BackgroundNoiseParameters(AugmentationParameters):
     apply: torch.BoolTensor
     noise_filepath: str
     noise: torch.FloatTensor
@@ -88,8 +89,10 @@ class BackgroundNoise(Augmentation):
     def augment(
         self,
         waveform: torch.FloatTensor,
-        parameters: BatchAugmentationParameters,
+        parameters: BackgroundNoiseParameters | BatchAugmentationParameters,
     ) -> torch.FloatTensor:
+        if isinstance(parameters, AugmentationParameters):
+            parameters = parameters.batch([parameters])
 
         if not torch.any(parameters.apply):
             return waveform

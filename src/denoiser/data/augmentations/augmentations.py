@@ -1,4 +1,4 @@
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, field
 
 import torch
 
@@ -7,7 +7,12 @@ from denoiser.data.audio import Audio
 
 @dataclass
 class AugmentationParameters:
-    apply: bool = True
+    apply: torch.BoolTensor = field(default_factory=lambda: torch.as_tensor(False))
+
+    def batch(
+        self, parameters: list["AugmentationParameters"]
+    ) -> "BatchAugmentationParameters":
+        return BatchAugmentationParameters(parameters)
 
 
 class BatchAugmentationParameters:
@@ -16,10 +21,8 @@ class BatchAugmentationParameters:
     """
 
     def __init__(self, parameters: list[AugmentationParameters]):
-        self.collate(parameters)
         self._parameters = parameters
 
-    def collate(self, parameters: list[AugmentationParameters]):
         assert all(isinstance(param, type(parameters[0])) for param in parameters)
         for field in fields(parameters[0]):
             values = [getattr(param, field.name) for param in parameters]
@@ -35,10 +38,17 @@ class BatchAugmentationParameters:
                     value = [val[i] for val in values]
                     batch.append(BatchAugmentationParameters(value))
             setattr(self, field.name, batch)
-        return self
 
-    def __getitem__(self, idx: int):
-        return self._parameters[idx]
+    def __getitem__(self, idx: int | torch.BoolTensor):
+        if isinstance(idx, int):
+            item = self._parameters[idx]
+        elif torch.is_tensor(idx):
+            assert idx.ndim == 1
+            parameters = [
+                param for param, apply in zip(self._parameters, idx) if apply.item()
+            ]
+            item = BatchAugmentationParameters(parameters=parameters)
+        return item
 
     def to(self, device: str | torch.device):
         for field in fields(self._parameters[0]):
@@ -83,6 +93,26 @@ class Augmentation:
     def __call__(self, audio: Audio, generator: torch.Generator = None):
         parameters = self.sample_parameters(audio=audio, generator=generator)
         augmented = self.augment(audio.waveform, parameters=parameters)
+        return augmented
+
+
+class Identity(Augmentation):
+    def sample_parameters(
+        self,
+        audio: Audio,
+        generator: torch.Generator = None,
+    ) -> AugmentationParameters:
+        apply = torch.rand(tuple(), generator=generator) <= self.p
+        return AugmentationParameters(apply=apply)
+
+    def augment(
+        self,
+        waveform: torch.Tensor,
+        parameters: BatchAugmentationParameters,
+    ) -> torch.Tensor:
+        apply = parameters.apply
+        augmented = waveform.clone()
+        augmented[apply] = waveform[apply]
         return augmented
 
 

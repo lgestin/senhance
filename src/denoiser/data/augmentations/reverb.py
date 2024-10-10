@@ -6,11 +6,15 @@ import torch
 import torchaudio.functional as F
 
 from denoiser.data.audio import Audio, AudioInfo
-from denoiser.data.augmentations.augmentations import Augmentation
+from denoiser.data.augmentations.augmentations import (
+    Augmentation,
+    AugmentationParameters,
+    BatchAugmentationParameters,
+)
 
 
-@dataclass
-class ReverbParameters:
+@dataclass(kw_only=True)
+class ReverbParameters(AugmentationParameters):
     apply: torch.BoolTensor
     ir_filepath: str
     ir: torch.FloatTensor
@@ -80,8 +84,10 @@ class Reverb(Augmentation):
     def augment(
         self,
         waveform: torch.FloatTensor,
-        parameters: ReverbParameters,
+        parameters: ReverbParameters | BatchAugmentationParameters,
     ) -> torch.FloatTensor:
+        if isinstance(parameters, AugmentationParameters):
+            parameters = parameters.batch([parameters])
 
         if not torch.any(parameters.apply):
             return waveform

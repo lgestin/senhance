@@ -3,11 +3,15 @@ from dataclasses import dataclass
 import torch
 
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import Augmentation
+from denoiser.data.augmentations.augmentations import (
+    Augmentation,
+    AugmentationParameters,
+    BatchAugmentationParameters,
+)
 
 
-@dataclass
-class ClippingParameters:
+@dataclass(kw_only=True)
+class ClippingParameters(AugmentationParameters):
     apply: torch.BoolTensor
     clip_percentile: torch.FloatTensor
 
@@ -41,9 +45,10 @@ class Clipping(Augmentation):
     def augment(
         self,
         waveform: torch.FloatTensor,
-        parameters: ClippingParameters,
+        parameters: ClippingParameters | BatchAugmentationParameters,
     ) -> torch.FloatTensor:
-
+        if isinstance(parameters, AugmentationParameters):
+            parameters = parameters.batch([parameters])
         if not torch.any(parameters.apply):
             return waveform
 

@@ -8,7 +8,7 @@ def collate(samples: list[Sample]) -> Batch:
     idxs = [sample.idx for sample in samples]
     audios = [sample.audio for sample in samples]
     waveforms = torch.stack([audio.waveform for audio in audios])
-    augmentation_params = BatchAugmentationParameters(
+    augmentation_params = samples[0].augmentation_params.batch(
         [sample.augmentation_params for sample in samples]
     )
     return Batch(

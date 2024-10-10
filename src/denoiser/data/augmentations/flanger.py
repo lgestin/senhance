@@ -4,11 +4,15 @@ import torch
 import torchaudio.functional as F
 
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import Augmentation
+from denoiser.data.augmentations.augmentations import (
+    Augmentation,
+    AugmentationParameters,
+    BatchAugmentationParameters,
+)
 
 
-@dataclass
-class FlangerParameters:
+@dataclass(kw_only=True)
+class FlangerParameters(AugmentationParameters):
     apply: torch.BoolTensor
     sample_rate: torch.FloatTensor
 
@@ -49,8 +53,10 @@ class Flanger(Augmentation):
     def augment(
         self,
         waveform: torch.FloatTensor,
-        parameters: FlangerParameters,
+        parameters: FlangerParameters | BatchAugmentationParameters,
     ) -> torch.FloatTensor:
+        if isinstance(parameters, AugmentationParameters):
+            parameters = parameters.batch([parameters])
 
         if not torch.any(parameters.apply):
             return waveform

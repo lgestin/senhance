@@ -4,12 +4,16 @@ import torch
 import torchaudio.functional as F
 
 from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import Augmentation
+from denoiser.data.augmentations.augmentations import (
+    Augmentation,
+    AugmentationParameters,
+    BatchAugmentationParameters,
+)
 from denoiser.data.augmentations.chain import Chain
 
 
-@dataclass
-class FilterParameters:
+@dataclass(kw_only=True)
+class FilterParameters(AugmentationParameters):
     apply: torch.BoolTensor
     freq_hz: torch.FloatTensor
     sample_rate: torch.FloatTensor
@@ -48,12 +52,17 @@ class Filter(Augmentation):
 
     @torch.inference_mode()
     def augment(
-        self, waveform: torch.Tensor, parameters: FilterParameters
+        self,
+        waveform: torch.Tensor,
+        parameters: FilterParameters | BatchAugmentationParameters,
     ) -> torch.Tensor:
-        apply = parameters.apply
+        if isinstance(parameters, AugmentationParameters):
+            parameters = parameters.batch([parameters])
+
         if not torch.any(parameters.apply):
             return waveform
 
+        apply = parameters.apply
         augmented = waveform.clone()
         for freq_hz in parameters.freq_hz[apply].unique().tolist():
             freq_mask = parameters.freq_hz == freq_hz
