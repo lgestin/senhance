@@ -22,8 +22,8 @@ class DescriptAudioCodec(Codec):
         decoded = self.dac.decode(encoded)
         return decoded
 
-    def normlize(self, z):
+    def normalize(self, z):
         return z / 3.5
 
-    def unnormlize(self, z):
+    def unnormalize(self, z):
         return 3.5 * z
