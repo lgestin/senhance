@@ -47,6 +47,7 @@ extra-dependencies = [
   "ipdb",
   "ipykernel",
   "matplotlib",
+  "seaborn",
 ]
 
 
