@@ -174,8 +174,8 @@ def train(exp_path: str, config: TrainingConfig):
         noisy = train_augments.augment(clean, parameters=augmentation_params)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             with torch.no_grad():
-                x_clean = codec.normalize(codec.encode(clean))
-                x_noisy = codec.normalize(codec.encode(noisy))
+                x_clean = 0.5 * codec.normalize(codec.encode(clean))
+                x_noisy = 0.5 * codec.normalize(codec.encode(noisy))
 
         timestep = torch.rand((clean.shape[0],), device=device)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
@@ -206,7 +206,7 @@ def train(exp_path: str, config: TrainingConfig):
         augmentation_params = batch.augmentation_params.to(device)
         noisy = test_augments.augment(clean, parameters=augmentation_params).clone()
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
-            x_noisy = codec.normalize(codec.encode(noisy))
+            x_noisy = 0.5 * codec.normalize(codec.encode(noisy))
 
         x_0 = cflow_matcher.sigma_0 * torch.randn_like(x_noisy)
         timesteps = torch.linspace(0, 1, config.n_cfm_steps).tolist()
@@ -216,7 +216,7 @@ def train(exp_path: str, config: TrainingConfig):
             timesteps=timesteps,
         )
         with torch.no_grad():
-            cleaned = codec.decode(codec.unnormalize(x_cleaned))
+            cleaned = codec.decode(2 * codec.unnormalize(x_cleaned))
         return noisy, cleaned
 
     smp_batch = next(iter(test_dloader)).to(device)
