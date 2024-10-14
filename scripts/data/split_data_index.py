@@ -8,9 +8,11 @@ def split_data_index(
     n_train: int | float,
     n_valid: int | float,
     n_test: int | float,
+    min_duration_s: float = 0.0,
 ):
     with open(data_index_path, "r") as f:
         index = json.load(f)
+    index = [idx for idx in index if idx["duration_s"] >= min_duration_s]
     random.shuffle(index)
 
     n_total = len(index)
@@ -48,6 +50,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_train", type=int, required=True)
     parser.add_argument("--n_valid", type=int, required=True)
     parser.add_argument("--n_test", type=int, required=True)
+    parser.add_argument("--min_duration_s", type=float, default=0.0)
 
     options = parser.parse_args()
 
