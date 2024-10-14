@@ -27,4 +27,4 @@ def timestep_embedding(timesteps, dim, max_period=10000):
 
 class SiLU(nn.SiLU):
     def forward(self, input):
-        return 0.596 * super().forward(input)
+        return super().forward(input) / 0.596
