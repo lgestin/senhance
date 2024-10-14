@@ -253,7 +253,7 @@ def train(exp_path: str, config: TrainingConfig):
                 for i, (x, y_hat) in enumerate(zip(noisy, cleaned)):
                     log_waveform(y_hat, f"0cleaned/{i}", step)
                     if step == 0:
-                        log_waveform(x, f"1noisy/{i}.wav", step)
+                        log_waveform(x, f"1noisy/{i}", step)
 
             if step % config.val_steps == 0:
                 vpbar = tqdm(total=len(valid_dloader), leave=False)
