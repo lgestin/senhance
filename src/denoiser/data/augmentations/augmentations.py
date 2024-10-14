@@ -66,21 +66,21 @@ class BatchAugmentationParameters:
             item = self.__class__(parameters=parameters)
         return item
 
-    def to(self, device: str | torch.device):
+    def to(self, device: str | torch.device, non_blocking: bool = False):
         for field in fields(self._parameters[0]):
             value = getattr(self, field.name)
             if torch.is_tensor(value):
-                value.to(device)
+                value.to(device, non_blocking=non_blocking)
             elif isinstance(value, BatchAugmentationParameters):
-                value.to(device)
+                value.to(device, non_blocking=non_blocking)
             elif isinstance(value, list):
                 if isinstance(value[0], BatchAugmentationParameters):
                     for val in value:
-                        val.to(device)
+                        val.to(device, non_blocking=non_blocking)
             elif isinstance(value, dict):
                 for val in value.values():
                     if isinstance(val, BatchAugmentationParameters):
-                        val.to(device)
+                        val.to(device, non_blocking=non_blocking)
         return self
 
     @property
