@@ -99,6 +99,5 @@ class Reverb(Augmentation):
         ir = ir / torch.linalg.vector_norm(ir, ord=2)
         augmented = waveform.clone()
         reverb = F.fftconvolve(waveform[apply], ir[apply])
-        reverb = reverb[..., : waveform.shape[-1]]
-        augmented[apply] = reverb
+        augmented[apply] = reverb[..., : waveform.shape[-1]]
         return augmented

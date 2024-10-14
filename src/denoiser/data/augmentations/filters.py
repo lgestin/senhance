@@ -74,7 +74,7 @@ class Filter(Augmentation):
             if not torch.any(freq_mask):
                 continue
             augmented[freq_mask] = self.filter_waveform(
-                waveform=waveform[freq_mask],
+                waveform=augmented[freq_mask],
                 sample_rate=sample_rate,
                 freq_hz=fhz,
             )

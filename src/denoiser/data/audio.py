@@ -90,6 +90,9 @@ class Audio:
             loudness = torchaudio.functional.loudness(
                 self.waveform, sample_rate=self.sample_rate
             ).item()
+        if math.isnan(loudness):
+            loudness = -70.0
+        self._loudness = loudness
         return loudness
 
     def mono(self):

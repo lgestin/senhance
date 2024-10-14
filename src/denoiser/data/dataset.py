@@ -30,7 +30,7 @@ class Batch:
         for field in fields(self):
             value = getattr(self, field.name)
             if torch.is_tensor(value) or isinstance(value, BatchAugmentationParameters):
-                value = value.to(device)
+                value = value.to(device, non_blocking=True)
                 setattr(self, field.name, value)
         return self
 
