@@ -3,8 +3,10 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
+from torch.nn.utils.parametrizations import weight_norm
 
-from denoiser.models.cfm.utils import timestep_embedding
+from denoiser.models.unet.magnitude_preserving import SiLU
+from denoiser.models.unet.magnitude_preserving import timestep_embedding
 from denoiser.models.unet.attention import SelfAttention
 
 
@@ -40,21 +42,25 @@ class ResnetBlock1d(TimestepAwareModule):
         super().__init__()
         self.convs = nn.Sequential(
             nn.GroupNorm(32, in_channels),
-            nn.SiLU(inplace=True),
-            nn.Conv1d(
-                in_channels,
-                out_channels,
-                kernel_size=3,
-                dilation=dilation,
-                padding=dilation,
+            SiLU(inplace=True),
+            weight_norm(
+                nn.Conv1d(
+                    in_channels,
+                    out_channels,
+                    kernel_size=3,
+                    dilation=dilation,
+                    padding=dilation,
+                )
             ),
             nn.GroupNorm(32, out_channels),
-            nn.SiLU(inplace=True),
-            nn.Conv1d(
-                out_channels,
-                out_channels,
-                kernel_size=3,
-                padding=1,
+            SiLU(inplace=True),
+            weight_norm(
+                nn.Conv1d(
+                    out_channels,
+                    out_channels,
+                    kernel_size=3,
+                    padding=1,
+                ),
             ),
         )
         if attn:
@@ -83,12 +89,12 @@ class UNET1d(nn.Module):
 
         t_emb_dim = 4 * dims.dim
         self.t_emb = nn.Sequential(
-            nn.Linear(dims.dim, t_emb_dim),
-            nn.SiLU(inplace=True),
-            nn.Linear(t_emb_dim, dims.dim),
+            weight_norm(nn.Linear(dims.dim, t_emb_dim)),
+            SiLU(inplace=True),
+            weight_norm(nn.Linear(t_emb_dim, dims.dim)),
         )
 
-        self.in_conv = nn.Conv1d(dims.in_dim, dims.dim, 1)
+        self.in_conv = weight_norm(nn.Conv1d(dims.in_dim, dims.dim, 1))
         encoder = [
             ResnetBlock1d(
                 in_channels=dims.dim,
@@ -113,15 +119,15 @@ class UNET1d(nn.Module):
         ]
         self.decoder = nn.ModuleList(decoder)
         self.out_conv = nn.Sequential(
-            nn.SiLU(inplace=True),
-            nn.Conv1d(dims.dim, dims.out_dim, 1),
+            SiLU(inplace=True),
+            weight_norm(nn.Conv1d(dims.dim, dims.out_dim, 1)),
         )
         self.cond_conv = nn.Sequential(
-            nn.Conv1d(dims.in_dim, dims.dim, 1),
-            nn.SiLU(inplace=True),
-            nn.Conv1d(dims.dim, dims.dim, 3, padding=1),
-            nn.SiLU(inplace=True),
-            nn.Conv1d(dims.dim, 2 * dims.n_layers * dims.dim, 1),
+            weight_norm(nn.Conv1d(dims.in_dim, dims.dim, 1)),
+            SiLU(inplace=True),
+            weight_norm(nn.Conv1d(dims.dim, dims.dim, 3, padding=1)),
+            SiLU(inplace=True),
+            weight_norm(nn.Conv1d(dims.dim, 2 * dims.n_layers * dims.dim, 1)),
         )
 
     def forward(
