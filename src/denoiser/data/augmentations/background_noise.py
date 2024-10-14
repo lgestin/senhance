@@ -67,6 +67,12 @@ class BackgroundNoise(Augmentation):
                 generator=generator,
             )
             noise = noise.mono().resample(audio.sample_rate)
+            noise._waveform[..., : audio.waveform.shape[-1]]
+            if noise.waveform.shape[-1] < audio.waveform.shape[-1]:
+                noise._waveform = torch.nn.functional.pad(
+                    noise._waveform,
+                    (0, audio.waveform.shape[-1] - noise.waveform.shape[-1]),
+                )
         else:
             zeros = torch.zeros_like(audio.waveform)
             noise = Audio(waveform=zeros, sample_rate=audio.sample_rate)
@@ -97,6 +103,10 @@ class BackgroundNoise(Augmentation):
         if not torch.any(parameters.apply):
             return waveform
 
+        device = waveform.device
+        noise = parameters.noise.to(device, non_blocking=True)
+        apply = parameters.apply.to(device, non_blocking=True)
+
         clean_loudness = parameters.clean_loudness[parameters.apply]
         noise_loudness = parameters.noise_loudness[parameters.apply]
         snr = parameters.snr[parameters.apply]
@@ -104,9 +114,8 @@ class BackgroundNoise(Augmentation):
         gain = clean_loudness - noise_loudness - snr
         gain = torch.exp(math.log(10) / 20 * gain)
         gain = gain.view(-1, 1, 1)
+        gain = gain.to(device, non_blocking=True)
 
         augmented = waveform.clone()
-        augmented[parameters.apply] = waveform[parameters.apply] + (
-            gain * parameters.noise[parameters.apply]
-        )
+        augmented[apply] = waveform[apply] + (gain * noise)
         return augmented

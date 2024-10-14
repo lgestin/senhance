@@ -6,25 +6,26 @@ from denoiser.data.augmentations.chain import Chain
 from denoiser.data.augmentations.choose import Choose
 
 
-def test_choose():
-    generator = torch.Generator().manual_seed(42)
+def test_chain():
     audio = Audio("/data/denoising/speech/daps/clean/f10_script1_clean.wav")
-    augment = Choose(
-        GaussianNoise(min_amplitude=10, max_amplitude=10),
-        # GaussianNoise(min_amplitude=100, max_amplitude=100),
-        Chain(
+    augment = Chain(
+        Choose(
             GaussianNoise(min_amplitude=10, max_amplitude=10),
             GaussianNoise(min_amplitude=100, max_amplitude=100),
         ),
-        weights=[0.5, 0.5],
+        GaussianNoise(min_amplitude=100, max_amplitude=100),
         p=0.5,
     )
 
-    excerpts = [audio.salient_excerpt(0.5, generator=generator) for _ in range(8)]
+    excerpts = [
+        audio.salient_excerpt(0.5, generator=torch.Generator().manual_seed(i))
+        for i in range(8)
+    ]
     waveforms = torch.stack([excerpt.waveform for excerpt in excerpts])
 
     augment_params = [
-        augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
+        augment.sample_parameters(excerpt, generator=torch.Generator().manual_seed(i))
+        for i, excerpt in enumerate(excerpts)
     ]
     augment_params = augment_params[0].batch(augment_params)
 
@@ -48,4 +49,4 @@ def test_choose():
 
 
 if __name__ == "__main__":
-    test_choose()
+    test_chain()

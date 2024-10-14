@@ -92,8 +92,10 @@ class Reverb(Augmentation):
         if not torch.any(parameters.apply):
             return waveform
 
-        apply = parameters.apply
-        ir = parameters.ir
+        device = waveform.device
+        ir = parameters.ir.to(device, non_blocking=True)
+        apply = parameters.apply.to(device, non_blocking=True)
+
         ir = ir / torch.linalg.vector_norm(ir, ord=2)
         augmented = waveform.clone()
         reverb = F.fftconvolve(waveform[apply], ir[apply])

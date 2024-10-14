@@ -1,12 +1,14 @@
 import torch
 from denoiser.data.augmentations.chain import Chain
 from denoiser.data.augmentations.choose import Choose
+from denoiser.data.augmentations.silence import Silence
 from denoiser.data.augmentations.background_noise import BackgroundNoise
 from denoiser.data.augmentations.reverb import Reverb
-from denoiser.data.augmentations.filters import LowPass, HighPass, BandPass
+from denoiser.data.augmentations.filters import LowPass, HighPass, BandPassChain
 
 
 def get_default_augmentation(sequence_length_s: float, split: str, p: float):
+    silence = Silence(p=0.025)
     background_noise = Choose(
         BackgroundNoise(
             f"/data/denoising/noise/records/urbansound8k/index.{split}.json",
@@ -28,19 +30,21 @@ def get_default_augmentation(sequence_length_s: float, split: str, p: float):
         weights=[1.0],
         p=0.4,
     )
-    freqs_hz = torch.linspace(500, 23000, 100).tolist()
+    freqs_hz = torch.linspace(500, 11000, 100).tolist()
     bands_hz = [[before, after] for before, after in zip(freqs_hz[:-1], freqs_hz[1:])]
     filters = Choose(
         LowPass(freqs_hz=freqs_hz),
         HighPass(freqs_hz=freqs_hz),
-        BandPass(bands_hz=bands_hz),
+        BandPassChain(bands_hz=bands_hz),
         weights=[0.4, 0.4, 0.2],
         p=0.6,
     )
     augmentation = Chain(
+        silence,
         background_noise,
         reverb,
         filters,
         p=p,
     )
+    # augmentation = background_noise
     return augmentation

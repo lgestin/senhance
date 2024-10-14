@@ -7,14 +7,16 @@ from denoiser.data.audio import Audio
 
 @dataclass
 class AugmentationParameters:
-    apply: torch.BoolTensor = field(default_factory=lambda: torch.as_tensor(False))
+    apply: torch.BoolTensor = field(default_factory=lambda: torch.as_tensor(True))
 
+    @classmethod
     def batch(
-        self, parameters: list["AugmentationParameters"]
+        cls, parameters: list["AugmentationParameters"]
     ) -> "BatchAugmentationParameters":
         return BatchAugmentationParameters(parameters)
 
 
+@dataclass
 class BatchAugmentationParameters:
     """
     each param is now a tensor to be used by Augmentation.augment
@@ -22,19 +24,36 @@ class BatchAugmentationParameters:
 
     def __init__(self, parameters: list[AugmentationParameters]):
         self._parameters = parameters
+        self._validate_parameters()
+        self._batch_fields()
 
-        assert all(isinstance(param, type(parameters[0])) for param in parameters)
-        for field in fields(parameters[0]):
-            values = [getattr(param, field.name) for param in parameters]
-            if torch.is_tensor(values[0]):
-                batch = torch.stack(values)
-            elif isinstance(values[0], (int, float, bool)):
-                batch = torch.as_tensor(values)
-            elif isinstance(values[0], str):
-                batch = values
-            else:
-                raise TypeError
+    def _validate_parameters(self):
+        are_all_params_same = all(
+            isinstance(param, type(self._parameters[0])) for param in self._parameters
+        )
+        assert are_all_params_same, "All parameters must be of the same type"
+
+    def _batch_fields(self):
+        for field in self.fields:
+            values = [getattr(param, field.name) for param in self._parameters]
+            batch = self._batch_values(values)
             setattr(self, field.name, batch)
+
+    @staticmethod
+    def _batch_values(values: list):
+        if torch.is_tensor(values[0]):
+            batch = torch.stack(values)
+        elif isinstance(values[0], (int, float, bool)):
+            batch = torch.as_tensor(values)
+        elif isinstance(values[0], str):
+            batch = values
+        else:
+            raise TypeError(f"Unsupported type for batching: {type(values[0])}")
+        return batch
+
+    @property
+    def fields(self):
+        return fields(self._parameters[0])
 
     def __getitem__(self, idx: int | torch.BoolTensor):
         if isinstance(idx, int):
@@ -51,8 +70,17 @@ class BatchAugmentationParameters:
         for field in fields(self._parameters[0]):
             value = getattr(self, field.name)
             if torch.is_tensor(value):
-                value = value.to(device)
-                setattr(self, field.name, value)
+                value.to(device)
+            elif isinstance(value, BatchAugmentationParameters):
+                value.to(device)
+            elif isinstance(value, list):
+                if isinstance(value[0], BatchAugmentationParameters):
+                    for val in value:
+                        val.to(device)
+            elif isinstance(value, dict):
+                for val in value.values():
+                    if isinstance(val, BatchAugmentationParameters):
+                        val.to(device)
         return self
 
     @property

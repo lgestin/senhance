@@ -37,11 +37,10 @@ class BatchChooseParameters(BatchAugmentationParameters):
             choices_params[choice].append(params.params[choice])
 
         choices_params = {
-            choice: BatchAugmentationParameters(params)
-            for choice, params in choices_params.items()
+            choice: params[0].batch(params) for choice, params in choices_params.items()
         }
         self.apply = apply
-        self.choices = choices
+        self.choice = choices
         self.params = choices_params
 
 
@@ -103,9 +102,9 @@ class Choose(Augmentation):
 
         augmented = waveform.clone()
         for choice, params in parameters.params.items():
-            choice_apply = parameters.choices == choice
-            # params = [params for c in parameters.choices]
-            augmented[choice_apply] = self.augmentations[choice].augment(
-                augmented[choice_apply], parameters=params
+            apply = parameters.choice == choice
+            apply = apply.to(augmented.device)
+            augmented[apply] = self.augmentations[choice].augment(
+                augmented[apply], parameters=params
             )
         return augmented

@@ -62,18 +62,21 @@ class Filter(Augmentation):
         if not torch.any(parameters.apply):
             return waveform
 
-        apply = parameters.apply
+        device = waveform.device
+        apply = parameters.apply.to(device, non_blocking=True)
+        freq_hz = parameters.freq_hz.to(device, non_blocking=True)
+        sample_rate = parameters.sample_rate.unique().to(device, non_blocking=True)
+
         augmented = waveform.clone()
-        for freq_hz in parameters.freq_hz[apply].unique().tolist():
-            freq_mask = parameters.freq_hz == freq_hz
+        for fhz in freq_hz[apply].unique():
+            freq_mask = fhz == freq_hz
             freq_mask = freq_mask & apply
             if not torch.any(freq_mask):
                 continue
-            sample_rate = parameters.sample_rate[freq_mask].unique().item()
             augmented[freq_mask] = self.filter_waveform(
                 waveform=waveform[freq_mask],
                 sample_rate=sample_rate,
-                freq_hz=freq_hz,
+                freq_hz=fhz,
             )
         return augmented
 
@@ -88,7 +91,6 @@ class LowPass(Filter):
         sample_rate: int,
         freq_hz: float,
     ) -> torch.Tensor:
-        print(sample_rate, freq_hz)
         waveform = F.lowpass_biquad(
             waveform=waveform,
             sample_rate=sample_rate,

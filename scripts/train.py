@@ -4,7 +4,7 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -38,6 +38,7 @@ class TrainingConfig:
     max_steps: int = 1_000_000
     val_steps: int = 5_000
     smp_steps: int = 5_000
+    n_val: int = 8192
     n_smp: int = 8
 
     n_workers: int = 8
@@ -122,10 +123,12 @@ def train(exp_path: str, config: TrainingConfig):
         sample_rate=sr,
         augmentation=valid_augments,
     )
+    valid_dataset = Subset(valid_dataset, list(range(config.n_val)))
     valid_dloader = DataLoader(
         valid_dataset,
         batch_size=config.batch_size,
         collate_fn=collate,
+        num_workers=config.n_workers,
     )
 
     test_audio_source = AudioSource(
@@ -167,7 +170,8 @@ def train(exp_path: str, config: TrainingConfig):
         batch = batch.to(device)
 
         clean = batch.waveforms
-        noisy = train_augments.augment(clean, parameters=batch.augmentation_params)
+        augmentation_params = batch.augmentation_params.to(device)
+        noisy = train_augments.augment(clean, parameters=augmentation_params)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             with torch.no_grad():
                 x_clean = codec.normalize(codec.encode(clean))
@@ -199,10 +203,9 @@ def train(exp_path: str, config: TrainingConfig):
     def sample(batch):
         batch = batch.to(device)
         clean = batch.waveforms.clone()
-        noisy = test_augments.augment(
-            clean, parameters=batch.augmentation_params
-        ).clone()
-        with torch.no_grad():
+        augmentation_params = batch.augmentation_params.to(device)
+        noisy = test_augments.augment(clean, parameters=augmentation_params).clone()
+        with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             x_noisy = codec.normalize(codec.encode(noisy))
 
         x_0 = cflow_matcher.sigma_0 * torch.randn_like(x_noisy)
@@ -219,14 +222,15 @@ def train(exp_path: str, config: TrainingConfig):
     smp_batch = next(iter(test_dloader)).to(device)
     writer = SummaryWriter(exp_path)
     pbar = tqdm(total=config.max_steps)
-    for i, (clean, noise) in enumerate(
-        zip(smp_batch.waveforms, smp_batch.augmentation_params.noise)
+    for i, (clean, params) in enumerate(
+        zip(smp_batch.waveforms, smp_batch.augmentation_params)
     ):
         with torch.no_grad():
             reconstructed = codec.reconstruct(clean[None])[0]
-        writer.add_audio(f"0clean/{i}.wav", clean, 0, sr)
-        writer.add_audio(f"1noise/{i}.wav", noise, 0, sr)
-        writer.add_audio(f"2reconstructed/{i}.wav", reconstructed, 0, sr)
+        # noise = params.params[1].params[params.params[1].choice.item()].noise
+        writer.add_audio(f"2clean/{i}.wav", clean, 0, sr)
+        # writer.add_audio(f"3noise/{i}.wav", noise, 0, sr)
+        writer.add_audio(f"4reconstructed/{i}.wav", reconstructed, 0, sr)
 
     step, best_loss = 0, torch.inf
     while 1:
@@ -236,16 +240,23 @@ def train(exp_path: str, config: TrainingConfig):
                 cflow_matcher.eval()
                 noisy, cleaned = sample(smp_batch)
                 for i, (x, y_hat) in enumerate(zip(noisy, cleaned)):
-                    writer.add_audio(f"3.noisy/{i}.wav", x, step, sr)
-                    writer.add_audio(f"4cleaned/{i}.wav", y_hat, step, sr)
+                    writer.add_audio(f"0cleaned/{i}.wav", y_hat, step, sr)
+                    if step == 0:
+                        writer.add_audio(f"1noisy/{i}.wav", x, step, sr)
 
             if step % config.val_steps == 0:
+                vpbar = tqdm(total=len(valid_dloader), leave=False)
                 cflow_matcher.eval()
                 val_metrics = defaultdict(list)
                 for vbatch in valid_dloader:
-                    metrics = process_batch(vbatch)
+                    with torch.inference_mode():
+                        metrics = process_batch(vbatch)
                     for key, value in metrics.items():
                         val_metrics[key] += [value]
+                    vpbar.update(1)
+                    vpbar.set_description_str(f"VALID {step} | {metrics['loss']:.4f}")
+                del vbatch
+                vpbar.close()
 
                 val_metrics = {
                     k: torch.stack(v).mean().item() for k, v in val_metrics.items()
