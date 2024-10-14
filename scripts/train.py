@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from denoiser.data.augmentations.default import get_default_augmentation
+from denoiser.data.stft import MelSpectrogram
 from denoiser.data.collate import collate
 from denoiser.data.dataset import AudioDataset
 from denoiser.data.source import AudioSource
@@ -81,6 +82,8 @@ def train(exp_path: str, config: TrainingConfig):
     codec = codec.freeze()
     codec = codec.to(device)
     codec = torch.compile(codec, disable=not config.nocompile)
+    mel_spectrogram = MelSpectrogram(1024, 256, 80, sample_rate=config.sample_rate)
+    mel_spectrogram = mel_spectrogram.to(device)
 
     ### AUGMENTS
     sequence_length_s = config.sequence_length_n_tokens / codec.resolution_hz
@@ -219,6 +222,14 @@ def train(exp_path: str, config: TrainingConfig):
             cleaned = codec.decode(2 * codec.unnormalize(x_cleaned))
         return noisy, cleaned
 
+    @torch.inference_mode()
+    def log_waveform(waveform, tag: str, step: int):
+        writer.add_audio(f"{tag}.wav", waveform, step, sr)
+        mels = mel_spectrogram(waveform[None].to(device)).log()
+        mels = mels.flip(1)
+        mels = (mels - mels.min()) / (mels.max() - mels.min())
+        writer.add_image(f"{tag}.png", mels, step)
+
     smp_batch = next(iter(test_dloader)).to(device)
     writer = SummaryWriter(exp_path)
     pbar = tqdm(total=config.max_steps)
@@ -227,10 +238,10 @@ def train(exp_path: str, config: TrainingConfig):
     ):
         with torch.no_grad():
             reconstructed = codec.reconstruct(clean[None])[0]
-        # noise = params.params[1].params[params.params[1].choice.item()].noise
-        writer.add_audio(f"2clean/{i}.wav", clean, 0, sr)
-        # writer.add_audio(f"3noise/{i}.wav", noise, 0, sr)
-        writer.add_audio(f"4reconstructed/{i}.wav", reconstructed, 0, sr)
+        noise = params.params[1].params[params.params[1].choice.item()].noise
+        log_waveform(clean, f"2clean/{i}", 0)
+        log_waveform(noise, f"3noise/{i}", 0)
+        log_waveform(reconstructed, f"4reconstructed/{i}", 0)
 
     step, best_loss = 0, torch.inf
     while 1:
@@ -240,9 +251,9 @@ def train(exp_path: str, config: TrainingConfig):
                 cflow_matcher.eval()
                 noisy, cleaned = sample(smp_batch)
                 for i, (x, y_hat) in enumerate(zip(noisy, cleaned)):
-                    writer.add_audio(f"0cleaned/{i}.wav", y_hat, step, sr)
+                    log_waveform(y_hat, f"0cleaned/{i}", step)
                     if step == 0:
-                        writer.add_audio(f"1noisy/{i}.wav", x, step, sr)
+                        log_waveform(x, f"1noisy/{i}.wav", step)
 
             if step % config.val_steps == 0:
                 vpbar = tqdm(total=len(valid_dloader), leave=False)
