@@ -1,6 +1,5 @@
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -13,6 +12,7 @@ from denoiser.data.stft import MelSpectrogram
 from denoiser.data.collate import collate
 from denoiser.data.dataset import AudioDataset
 from denoiser.data.source import AudioSource
+from denoiser.models.checkpoint import Checkpoint
 from denoiser.models.cfm.cfm import ConditionalFlowMatcher
 from denoiser.models.codec.dac import DescriptAudioCodec
 from denoiser.models.unet.unet import UNET1d, UNET1dDims
@@ -45,30 +45,6 @@ class TrainingConfig:
     n_workers: int = 8
     nocompile: bool = False
     noamp: bool = False
-
-
-@dataclass
-class Checkpoint:
-    codec: str
-    step: int
-    best_loss: float
-    model: dict[str, torch.Tensor]
-    opt: dict[str, torch.Tensor]
-
-    def __post_init__(self):
-        self.executor = ThreadPoolExecutor(1)
-
-    def save(self, path: str):
-        def save():
-            torch.save({k: getattr(self, k.name) for k in fields(self)}, path)
-
-        self.executor.submit(save)
-
-    @classmethod
-    def load(cls, path: str, map_location: str | torch.device = "cpu"):
-        checkpoint = torch.load(path, map_location=map_location)
-        checkpoint = cls(**checkpoint)
-        return cls
 
 
 def train(exp_path: str, config: TrainingConfig):
