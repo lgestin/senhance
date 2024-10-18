@@ -1,7 +1,8 @@
 import torch
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, asdict
 
 from concurrent.futures import ThreadPoolExecutor
+from denoiser.models.unet.unet import UNET1dDims
 
 
 @dataclass
@@ -9,6 +10,7 @@ class Checkpoint:
     codec: str
     step: int
     best_loss: float
+    dims: UNET1dDims
     model: dict[str, torch.Tensor]
     opt: dict[str, torch.Tensor]
 
@@ -17,13 +19,13 @@ class Checkpoint:
 
     def save(self, path: str):
         def save():
-            torch.save({k.name: getattr(self, k.name) for k in fields(self)}, path)
+            torch.save(asdict(self), path)
 
         self.executor.submit(save)
         return
 
     @classmethod
     def load(cls, path: str, map_location: str | torch.device = "cpu"):
-        checkpoint = torch.load(path, map_location=map_location)
+        checkpoint = torch.load(path, map_location=map_location, weights_only=True)
         checkpoint = cls(**checkpoint)
-        return cls
+        return checkpoint
