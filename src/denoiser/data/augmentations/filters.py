@@ -57,7 +57,7 @@ class Filter(Augmentation):
         parameters: FilterParameters | BatchAugmentationParameters,
     ) -> torch.Tensor:
         if isinstance(parameters, AugmentationParameters):
-            parameters = parameters.batch([parameters])
+            parameters = parameters.collate([parameters])
 
         if not torch.any(parameters.apply):
             return waveform

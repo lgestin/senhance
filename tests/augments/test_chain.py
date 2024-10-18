@@ -27,7 +27,7 @@ def test_chain():
         augment.sample_parameters(excerpt, generator=torch.Generator().manual_seed(i))
         for i, excerpt in enumerate(excerpts)
     ]
-    augment_params = augment_params[0].batch(augment_params)
+    augment_params = augment_params[0].collate(augment_params)
 
     augmented = augment.augment(waveforms, augment_params)
     assert torch.is_tensor(augmented)

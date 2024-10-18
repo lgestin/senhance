@@ -17,15 +17,15 @@ class ChooseParameters(AugmentationParameters):
     choice: torch.LongTensor
     params: dict[int, AugmentationParameters]
 
-    def batch(
+    def collate(
         self, parameters: list["ChooseParameters"]
     ) -> dict[AugmentationParameters, BatchAugmentationParameters]:
         return BatchChooseParameters(parameters)
 
 
 class BatchChooseParameters(BatchAugmentationParameters):
-    def __init__(self, parameters: list[ChooseParameters]):
-        self._parameters = parameters
+    def collate_fields(self):
+        parameters = self._parameters
 
         apply = torch.empty((len(parameters),), dtype=torch.bool)
         choices = torch.empty((len(parameters),), dtype=torch.long)
@@ -37,7 +37,8 @@ class BatchChooseParameters(BatchAugmentationParameters):
             choices_params[choice].append(params.params[choice])
 
         choices_params = {
-            choice: params[0].batch(params) for choice, params in choices_params.items()
+            choice: params[0].collate(params)
+            for choice, params in choices_params.items()
         }
         self.apply = apply
         self.choice = choices

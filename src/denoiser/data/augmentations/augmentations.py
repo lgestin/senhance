@@ -10,7 +10,7 @@ class AugmentationParameters:
     apply: torch.BoolTensor = field(default_factory=lambda: torch.as_tensor(True))
 
     @classmethod
-    def batch(
+    def collate(
         cls, parameters: list["AugmentationParameters"]
     ) -> "BatchAugmentationParameters":
         return BatchAugmentationParameters(parameters)
@@ -25,7 +25,7 @@ class BatchAugmentationParameters:
     def __init__(self, parameters: list[AugmentationParameters]):
         self._parameters = parameters
         self._validate_parameters()
-        self._batch_fields()
+        self.collate_fields()
 
     def _validate_parameters(self):
         are_all_params_same = all(
@@ -33,14 +33,14 @@ class BatchAugmentationParameters:
         )
         assert are_all_params_same, "All parameters must be of the same type"
 
-    def _batch_fields(self):
+    def collate_fields(self):
         for field in self.fields:
             values = [getattr(param, field.name) for param in self._parameters]
-            batch = self._batch_values(values)
+            batch = self._collate_values(values)
             setattr(self, field.name, batch)
 
     @staticmethod
-    def _batch_values(values: list):
+    def _collate_values(values: list):
         if torch.is_tensor(values[0]):
             batch = torch.stack(values)
         elif isinstance(values[0], (int, float, bool)):
@@ -86,6 +86,13 @@ class BatchAugmentationParameters:
     @property
     def size(self):
         return len(self._parameters)
+
+    @classmethod
+    def collate(cls, parameters: list[AugmentationParameters]):
+        assert all(isinstance(param, parameters[0].__class__) for param in parameters)
+        # parameters = cls(parameters)
+        parameters = parameters[0].collate(parameters)
+        return parameters
 
 
 class Augmentation:

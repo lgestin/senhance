@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass, fields
 
 import torch
@@ -50,8 +51,11 @@ class AudioDataset(Dataset):
         return len(self.audio_source)
 
     def __getitem__(self, idx: int) -> Sample:
+        t0 = time.perf_counter()
         audio = self.audio_source[idx]
+        t1 = time.perf_counter()
         audio = audio.resample(self.sample_rate).normalize(-24.0)
+        t2 = time.perf_counter()
 
         augmentation_params = None
         if self.augmentation is not None:
@@ -59,4 +63,8 @@ class AudioDataset(Dataset):
                 audio=audio,
                 generator=torch.Generator().manual_seed(idx),
             )
+            t3 = time.perf_counter()
+        # print(f"\tAUDIO    {t1 - t0:.6f}s")
+        # print(f"\tRESAMPLE {t2 - t1:.6f}s")
+        # print(f"\tAUG      {t3 - t2:.6f}s")
         return Sample(idx=idx, audio=audio, augmentation_params=augmentation_params)

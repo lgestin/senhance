@@ -16,7 +16,7 @@ def test_lowpass():
     augment_params = [
         augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
     ]
-    augment_params = augment_params[0].batch(augment_params)
+    augment_params = augment_params[0].collate(augment_params)
 
     augmented = augment.augment(waveforms, augment_params)
     assert torch.is_tensor(augmented)
@@ -48,7 +48,7 @@ def test_highpass():
     augment_params = [
         augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
     ]
-    augment_params = augment_params[0].batch(augment_params)
+    augment_params = augment_params[0].collate(augment_params)
 
     augmented = augment.augment(waveforms, augment_params)
     assert torch.is_tensor(augmented)
@@ -80,7 +80,7 @@ def test_bandpass():
     augment_params = [
         augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
     ]
-    augment_params = augment_params[0].batch(augment_params)
+    augment_params = augment_params[0].collate(augment_params)
 
     augmented = augment.augment(waveforms, augment_params)
     assert torch.is_tensor(augmented)

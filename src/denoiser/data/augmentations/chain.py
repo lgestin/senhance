@@ -15,21 +15,19 @@ class ChainParameters(AugmentationParameters):
     apply: torch.BoolTensor
     params: list[AugmentationParameters]
 
-    def batch(
+    def collate(
         self, parameters: list["ChainParameters"]
     ) -> dict[AugmentationParameters, BatchAugmentationParameters]:
         return BatchChainParameters(parameters)
 
 
 class BatchChainParameters(BatchAugmentationParameters):
-    def __init__(self, parameters: list[ChainParameters]):
-        self._parameters = parameters
-
-        apply = torch.stack([param.apply for param in parameters])
+    def collate_fields(self):
+        apply = torch.stack([param.apply for param in self._parameters])
         chain_parameters = []
-        for i in range(len(parameters[0].params)):
-            parameters_ = [params.params[i] for params in parameters]
-            chain_parameters_ = parameters_[0].batch(parameters_)
+        for i in range(len(self._parameters[0].params)):
+            parameters_ = [params.params[i] for params in self._parameters]
+            chain_parameters_ = parameters_[0].collate(parameters_)
             # apply = chain_parameters_.apply & chain_apply
             chain_parameters.append(chain_parameters_)
 

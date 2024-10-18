@@ -87,7 +87,7 @@ class Reverb(Augmentation):
         parameters: ReverbParameters | BatchAugmentationParameters,
     ) -> torch.FloatTensor:
         if isinstance(parameters, AugmentationParameters):
-            parameters = parameters.batch([parameters])
+            parameters = parameters.collate([parameters])
 
         if not torch.any(parameters.apply):
             return waveform
