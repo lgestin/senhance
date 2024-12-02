@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.attention.flex_attention
 from einops import rearrange
+
+from denoiser.models.unet.magnitude_preserving import MPConv1d, SiLU, normalize
 
 
 class RMSNorm(torch.nn.Module):
@@ -34,21 +36,21 @@ class SelfAttention(nn.Module):
     def __init__(self, dim: int, num_heads: int = 8, qkv_bias: bool = False):
         super().__init__()
         self.num_heads = num_heads
-        head_dim = dim // num_heads
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.norm = QKNorm(head_dim)
-        self.proj = nn.Linear(dim, dim)
+        self.qkv = MPConv1d(dim, dim * 3, 1)
+        self.proj = nn.Sequential(
+            MPConv1d(dim, 4 * dim, 1),
+            SiLU(),
+            MPConv1d(4 * dim, dim, 1),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.transpose(1, 2)
         qkv = self.qkv(x)
-        q, k, v = rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
-        q, k, v = self.norm(q, k, v)
-        x = F.scaled_dot_product_attention(q, k, v)
-        x = rearrange(x, "B H L D -> B L (H D)")
+        qkv = rearrange(qkv, "B (K H D) L -> K B H L D", K=3, H=self.num_heads)
+        q, k, v = normalize(qkv, dim=-1)
+        x = torch.nn.attention.flex_attention.flex_attention(q, k, v)
+        x = rearrange(x, "B H L D -> B (H D) L")
         x = self.proj(x)
-        x = x.transpose(1, 2)
         return x
 
 
