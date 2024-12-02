@@ -28,8 +28,8 @@ classifiers = [
 [tool.hatch.envs.default]
 installer = "pip"
 dependencies = [
-  "torch",
-  "torchaudio",
+  "torch==2.5.0",
+  "torchaudio==2.5.0",
   "torchvision",
   "tqdm",
   "tensorboard",
