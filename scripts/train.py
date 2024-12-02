@@ -8,12 +8,12 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from denoiser.data.augmentations.default import get_default_augmentation
-from denoiser.data.stft import MelSpectrogram
 from denoiser.data.collate import collate
 from denoiser.data.dataset import AudioDataset
 from denoiser.data.source import AudioSource
-from denoiser.models.checkpoint import Checkpoint
+from denoiser.data.stft import MelSpectrogram
 from denoiser.models.cfm.cfm import ConditionalFlowMatcher
+from denoiser.models.checkpoint import Checkpoint
 from denoiser.models.codec.dac import DescriptAudioCodec
 from denoiser.models.unet.unet import UNET1d, UNET1dDims
 
@@ -142,7 +142,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
     cflow_matcher = cflow_matcher.to(device)
 
-    opt = torch.optim.AdamW(cflow_matcher.parameters(), lr=config.lr)
+    opt = torch.optim.AdamW(cflow_matcher.parameters(), lr=config.lr, betas=(0.9, 0.99))
     scaler = torch.GradScaler()
 
     def process_batch(batch):
@@ -220,9 +220,8 @@ def train(exp_path: str, config: TrainingConfig):
         log_waveform(reconstructed, f"4reconstructed/{i}", 0)
 
     step, best_loss = 0, torch.inf
-    while 1:
+    while step < config.max_steps:
         for batch in train_dloader:
-
             if step % config.smp_steps == 0:
                 cflow_matcher.eval()
                 noisy, cleaned = sample(smp_batch)
@@ -255,6 +254,7 @@ def train(exp_path: str, config: TrainingConfig):
                     codec=codec.__class__.__name__,
                     step=step,
                     best_loss=best_loss,
+                    dims=cflow_matcher.module.dims,
                     model=cflow_matcher.state_dict(),
                     opt=opt.state_dict(),
                 )
