@@ -3,15 +3,23 @@ import torch
 from denoiser.models.unet.unet import UNET1d, UNET1dDims
 
 
+@torch.inference_mode()
 def test_unet():
-    batch_size = 8
-    in_dim, dim, out_dim = 4, 32, 4
-    dims = UNET1dDims(in_dim=in_dim, dim=dim, out_dim=out_dim, n_layers=1)
-    unet = UNET1d(dims)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(device)
 
-    x = torch.randn(batch_size, in_dim, 128)
+    batch_size, t = 8, 64
+    dims = UNET1dDims(
+        in_dim=4,
+        dim=32,
+        t_dim=16,
+        c_dim=4,
+    )
+    unet = UNET1d(dims).to(device)
+
+    x = torch.randn(batch_size, dims.in_dim, t, device=device)
     x_cond = torch.randn_like(x)
-    timestep = torch.rand((batch_size,))
+    timestep = torch.rand((batch_size,), device=device)
     y = unet.forward(x_t=x, x_cond=x_cond, timestep=timestep)
     assert torch.is_tensor(y)
     assert y.shape == x.shape
