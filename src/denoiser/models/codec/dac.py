@@ -1,5 +1,6 @@
 import torch
 from dac import DAC
+
 from denoiser.models.codec.codec import Codec
 
 
@@ -17,7 +18,7 @@ class DescriptAudioCodec(Codec):
         quantized = self.dac.quantizer(z)[0]
         return self.dac.decode(quantized)
 
-    def reconstruct(self, x):
+    def reconstruct(self, x: torch.Tensor):
         encoded = self.dac.encode(x)[0]
         decoded = self.dac.decode(encoded)
         return decoded
