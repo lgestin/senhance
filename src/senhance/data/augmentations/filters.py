@@ -3,13 +3,13 @@ from dataclasses import dataclass
 import torch
 import torchaudio.functional as F
 
-from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import (
+from senhance.data.audio import Audio
+from senhance.data.augmentations.augmentations import (
     Augmentation,
     AugmentationParameters,
     BatchAugmentationParameters,
 )
-from denoiser.data.augmentations.chain import Chain
+from senhance.data.augmentations.chain import Chain
 
 
 @dataclass(kw_only=True)

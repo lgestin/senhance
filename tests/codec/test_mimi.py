@@ -1,7 +1,7 @@
 import torch
 
-from denoiser.data.audio import Audio
-from denoiser.models.codec.mimi import MimiCodec
+from senhance.data.audio import Audio
+from senhance.models.codec.mimi import MimiCodec
 
 
 @torch.inference_mode()

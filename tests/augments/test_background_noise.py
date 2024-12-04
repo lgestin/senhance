@@ -1,8 +1,8 @@
 import torch
 
-from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import BatchAugmentationParameters
-from denoiser.data.augmentations.background_noise import BackgroundNoise
+from senhance.data.audio import Audio
+from senhance.data.augmentations.augmentations import BatchAugmentationParameters
+from senhance.data.augmentations.background_noise import BackgroundNoise
 
 
 def test_background_noise():

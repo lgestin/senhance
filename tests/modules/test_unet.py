@@ -1,6 +1,6 @@
 import torch
 
-from denoiser.models.unet.unet import UNET1d, UNET1dDims
+from senhance.models.unet.unet import UNET1d, UNET1dDims
 
 
 @torch.inference_mode()

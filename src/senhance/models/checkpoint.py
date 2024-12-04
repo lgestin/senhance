@@ -2,7 +2,7 @@ import torch
 from dataclasses import dataclass, asdict
 
 from concurrent.futures import ThreadPoolExecutor
-from denoiser.models.unet.unet import UNET1dDims
+from senhance.models.unet.unet import UNET1dDims
 
 
 @dataclass

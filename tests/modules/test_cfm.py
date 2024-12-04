@@ -1,7 +1,7 @@
 import torch
 
-from denoiser.models.cfm.cfm import ConditionalFlowMatcher
-from denoiser.models.unet.unet import UNET1d, UNET1dDims
+from senhance.models.cfm.cfm import ConditionalFlowMatcher
+from senhance.models.unet.unet import UNET1d, UNET1dDims
 
 
 def test_cfm():

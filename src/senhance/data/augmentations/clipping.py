@@ -2,8 +2,8 @@ from dataclasses import dataclass
 
 import torch
 
-from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import (
+from senhance.data.audio import Audio
+from senhance.data.augmentations.augmentations import (
     Augmentation,
     AugmentationParameters,
     BatchAugmentationParameters,

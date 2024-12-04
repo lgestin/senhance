@@ -5,7 +5,7 @@ from moshi.modules import SEANetDecoder, SEANetEncoder, transformer
 from moshi.quantization import SplitResidualVectorQuantizer
 from safetensors.torch import load_model
 
-from denoiser.models.codec.codec import Codec
+from senhance.models.codec.codec import Codec
 
 
 class MimiCodec(Codec):

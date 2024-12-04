@@ -1,7 +1,7 @@
 import torch
 from dac import DAC
 
-from denoiser.models.codec.codec import Codec
+from senhance.models.codec.codec import Codec
 
 
 class DescriptAudioCodec(Codec):

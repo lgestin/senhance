@@ -5,7 +5,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from denoiser.data.audio import Audio, AudioInfo
+from senhance.data.audio import Audio, AudioInfo
 
 
 def create_data_index(

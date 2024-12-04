@@ -1,4 +1,4 @@
-from denoiser.data.source import AudioSource
+from senhance.data.source import AudioSource
 
 
 def test_audiosource():

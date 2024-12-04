@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
-from denoiser.data.augmentations.default import get_default_augmentation
-from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import BatchAugmentationParameters
+from senhance.data.augmentations.default import get_default_augmentation
+from senhance.data.audio import Audio
+from senhance.data.augmentations.augmentations import BatchAugmentationParameters
 
 
 def test_augments():

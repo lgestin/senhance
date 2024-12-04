@@ -1,5 +1,5 @@
-from denoiser.data.dataset import AudioDataset
-from denoiser.data.source import AudioSource
+from senhance.data.dataset import AudioDataset
+from senhance.data.source import AudioSource
 
 
 def test_denoising_dataset():

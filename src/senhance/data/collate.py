@@ -1,7 +1,7 @@
 import time
 import torch
 
-from denoiser.data.dataset import Batch, Sample
+from senhance.data.dataset import Batch, Sample
 
 
 def collate(samples: list[Sample]) -> Batch:

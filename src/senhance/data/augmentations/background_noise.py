@@ -5,13 +5,13 @@ from pathlib import Path
 
 import torch
 
-from denoiser.data.audio import Audio, AudioInfo
-from denoiser.data.augmentations.augmentations import (
+from senhance.data.audio import Audio, AudioInfo
+from senhance.data.augmentations.augmentations import (
     Augmentation,
     AugmentationParameters,
     BatchAugmentationParameters,
 )
-from denoiser.data.utils import truncated_normal
+from senhance.data.utils import truncated_normal
 
 
 @dataclass(kw_only=True)

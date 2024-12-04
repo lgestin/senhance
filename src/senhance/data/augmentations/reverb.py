@@ -5,8 +5,8 @@ from pathlib import Path
 import torch
 import torchaudio.functional as F
 
-from denoiser.data.audio import Audio, AudioInfo
-from denoiser.data.augmentations.augmentations import (
+from senhance.data.audio import Audio, AudioInfo
+from senhance.data.augmentations.augmentations import (
     Augmentation,
     AugmentationParameters,
     BatchAugmentationParameters,

@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from denoiser.models.unet.attention import SelfAttention
-from denoiser.models.unet.magnitude_preserving import (
+from senhance.models.unet.attention import SelfAttention
+from senhance.models.unet.magnitude_preserving import (
     MPConv1d,
     PixelNorm,
     SiLU,

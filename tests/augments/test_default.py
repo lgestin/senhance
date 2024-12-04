@@ -1,9 +1,9 @@
 import torch
 
-from denoiser.data.audio import Audio
-from denoiser.data.augmentations.gaussian_noise import GaussianNoise
-from denoiser.data.augmentations.default import get_default_augmentation
-from denoiser.data.augmentations.choose import Choose
+from senhance.data.audio import Audio
+from senhance.data.augmentations.gaussian_noise import GaussianNoise
+from senhance.data.augmentations.default import get_default_augmentation
+from senhance.data.augmentations.choose import Choose
 
 
 def test_default():

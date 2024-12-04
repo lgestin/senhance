@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "denoiser"
+name = "senhance"
 dynamic = ["version"]
 description = ""
 readme = "README.md"
@@ -52,24 +52,24 @@ extra-dependencies = [
 
 
 [project.urls]
-Documentation = "https://github.com/lgestin/denoiser#readme"
-Issues = "https://github.com/lgestin/denoiser/issues"
-Source = "https://github.com/lgestin/denoiser"
+Documentation = "https://github.com/lgestin/senhance#readme"
+Issues = "https://github.com/lgestin/senhance/issues"
+Source = "https://github.com/lgestin/senhance"
 
 [tool.hatch.version]
-path = "src/denoiser/__init__.py"
+path = "src/senhance/__init__.py"
 
 [tool.coverage.run]
-source_pkgs = ["denoiser", "tests"]
+source_pkgs = ["senhance", "tests"]
 branch = true
 parallel = true
 omit = [
-  "src/denoiser/__about__.py",
+  "src/senhance/__about__.py",
 ]
 
 [tool.coverage.paths]
-denoiser = ["src/denoiser", "*/denoiser/src/denoiser"]
-tests = ["tests", "*/denoiser/tests"]
+senhance = ["src/senhance", "*/senhance/src/senhance"]
+tests = ["tests", "*/senhance/tests"]
 
 [tool.coverage.report]
 exclude_lines = [

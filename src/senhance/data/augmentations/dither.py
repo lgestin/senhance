@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 
 import torch
+import torchaudio.functional as F
 
-from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import (
+from senhance.data.audio import Audio
+from senhance.data.augmentations.augmentations import (
     Augmentation,
     AugmentationParameters,
     BatchAugmentationParameters,
@@ -11,27 +12,30 @@ from denoiser.data.augmentations.augmentations import (
 
 
 @dataclass(kw_only=True)
-class SilenceParameters(AugmentationParameters):
+class DitherParameters(AugmentationParameters):
     apply: torch.BoolTensor
+    density_function: str
 
 
-class Silence(Augmentation):
-    def __init__(self, p: float = 1.0):
+class Dither(Augmentation):
+    def __init__(self, density_function: str = "TPDF", p: float = 1.0):
         super().__init__(p=p)
+        self.density_function = density_function
 
     def sample_parameters(
         self,
         audio: Audio,
         generator: torch.Generator = None,
-    ) -> SilenceParameters:
+    ) -> DitherParameters:
         apply = torch.rand(tuple(), generator=generator) <= self.p
-        return SilenceParameters(apply=apply)
+        density_function = self.density_function
+        return DitherParameters(apply=apply, density_function=density_function)
 
     @torch.inference_mode()
     def augment(
         self,
         waveform: torch.FloatTensor,
-        parameters: SilenceParameters | BatchAugmentationParameters,
+        parameters: DitherParameters | BatchAugmentationParameters,
     ) -> torch.FloatTensor:
         if isinstance(parameters, AugmentationParameters):
             parameters = parameters.collate([parameters])
@@ -40,6 +44,11 @@ class Silence(Augmentation):
             return waveform
 
         apply = parameters.apply
+        density_function = parameters.density_function[0]
+
         augmented = waveform.clone()
-        augmented[apply] = 0.0 * augmented[apply]
+        augmented[apply] = F.dither(
+            waveform=augmented[apply],
+            density_function=density_function,
+        )
         return augmented

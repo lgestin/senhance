@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, fields
 
 import torch
 
-from denoiser.data.audio import Audio
+from senhance.data.audio import Audio
 
 
 @dataclass

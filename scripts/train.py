@@ -7,15 +7,15 @@ from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from denoiser.data.augmentations.default import get_default_augmentation
-from denoiser.data.collate import collate
-from denoiser.data.dataset import AudioDataset
-from denoiser.data.source import AudioSource
-from denoiser.data.stft import MelSpectrogram
-from denoiser.models.cfm.cfm import ConditionalFlowMatcher
-from denoiser.models.checkpoint import Checkpoint
-from denoiser.models.codec.dac import DescriptAudioCodec
-from denoiser.models.unet.unet import UNET1d, UNET1dDims
+from senhance.data.augmentations.default import get_default_augmentation
+from senhance.data.collate import collate
+from senhance.data.dataset import AudioDataset
+from senhance.data.source import AudioSource
+from senhance.data.stft import MelSpectrogram
+from senhance.models.cfm.cfm import ConditionalFlowMatcher
+from senhance.models.checkpoint import Checkpoint
+from senhance.models.codec.dac import DescriptAudioCodec
+from senhance.models.unet.unet import UNET1d, UNET1dDims
 
 
 @dataclass

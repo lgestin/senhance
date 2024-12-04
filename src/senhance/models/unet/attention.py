@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.attention.flex_attention
 from einops import rearrange
 
-from denoiser.models.unet.magnitude_preserving import MPConv1d, SiLU, normalize
+from senhance.models.unet.magnitude_preserving import MPConv1d, SiLU, normalize
 
 
 class RMSNorm(torch.nn.Module):

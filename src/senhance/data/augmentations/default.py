@@ -1,10 +1,10 @@
 import torch
-from denoiser.data.augmentations.chain import Chain
-from denoiser.data.augmentations.choose import Choose
-from denoiser.data.augmentations.silence import Silence
-from denoiser.data.augmentations.background_noise import BackgroundNoise
-from denoiser.data.augmentations.reverb import Reverb
-from denoiser.data.augmentations.filters import LowPass, HighPass, BandPassChain
+from senhance.data.augmentations.chain import Chain
+from senhance.data.augmentations.choose import Choose
+from senhance.data.augmentations.silence import Silence
+from senhance.data.augmentations.background_noise import BackgroundNoise
+from senhance.data.augmentations.reverb import Reverb
+from senhance.data.augmentations.filters import LowPass, HighPass, BandPassChain
 
 
 def get_default_augmentation(sequence_length_s: float, split: str, p: float):

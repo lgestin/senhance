@@ -4,13 +4,13 @@ from dataclasses import dataclass, fields
 import torch
 from torch.utils.data import Dataset
 
-from denoiser.data.audio import Audio
-from denoiser.data.augmentations.augmentations import (
+from senhance.data.audio import Audio
+from senhance.data.augmentations.augmentations import (
     Augmentation,
     AugmentationParameters,
     BatchAugmentationParameters,
 )
-from denoiser.data.source import AudioSource
+from senhance.data.source import AudioSource
 
 
 @dataclass

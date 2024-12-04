@@ -6,7 +6,7 @@ import soundfile as sf
 import torch
 import torchaudio
 
-from denoiser.data.utils import load_audio
+from senhance.data.utils import load_audio
 
 
 @dataclass

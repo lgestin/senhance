@@ -3,7 +3,7 @@ from pathlib import Path
 
 import torch
 
-from denoiser.data.audio import Audio, AudioInfo
+from senhance.data.audio import Audio, AudioInfo
 
 
 class AudioSource:

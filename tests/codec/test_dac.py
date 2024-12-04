@@ -1,7 +1,7 @@
 import torch
 
-from denoiser.data.audio import Audio
-from denoiser.models.codec.dac import DescriptAudioCodec
+from senhance.data.audio import Audio
+from senhance.models.codec.dac import DescriptAudioCodec
 
 
 @torch.inference_mode()
