@@ -15,7 +15,7 @@ from senhance.data.stft import MelSpectrogram
 from senhance.models.cfm.cfm import ConditionalFlowMatcher
 from senhance.models.checkpoint import Checkpoint
 from senhance.models.codec.dac import DescriptAudioCodec
-from senhance.models.unet.unet import UNET1d, UNET1dDims
+from senhance.models.unet.simple_unet import UNET1d, UNET1dDims
 
 
 @dataclass
@@ -125,21 +125,12 @@ def train(exp_path: str, config: TrainingConfig):
         collate_fn=collate,
     )
 
-    unet_dims = UNET1dDims(
-        in_dim=codec.dim,
-        dim=config.n_dim,
-        out_dim=codec.dim,
-        n_layers=config.n_layers,
-    )
+    unet_dims = UNET1dDims(in_dim=codec.dim, dim=config.n_dim, t_dim=config.n_dim)
     unet = UNET1d(unet_dims)
     unet = unet.to(device)
     unet = torch.compile(unet, disable=not config.nocompile)
 
-    cflow_matcher = ConditionalFlowMatcher(
-        unet,
-        sigma_0=config.sigma_0,
-        sigma_1=config.sigma_1,
-    )
+    cflow_matcher = ConditionalFlowMatcher(unet)
     cflow_matcher = cflow_matcher.to(device)
 
     opt = torch.optim.AdamW(cflow_matcher.parameters(), lr=config.lr, betas=(0.9, 0.99))
@@ -153,14 +144,14 @@ def train(exp_path: str, config: TrainingConfig):
         noisy = train_augments.augment(clean, parameters=augmentation_params)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             with torch.no_grad():
-                x_clean = 0.5 * codec.normalize(codec.encode(clean))
-                x_noisy = 0.5 * codec.normalize(codec.encode(noisy))
+                x_clean = codec.normalize(codec.encode(clean))
+                x_noisy = codec.normalize(codec.encode(noisy))
 
         timestep = torch.rand((clean.shape[0],), device=device)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             vt, ut = cflow_matcher(
+                x_0=x_noisy,
                 x_1=x_clean,
-                x_cond=x_noisy,
                 timestep=timestep,
             )
             loss = torch.nn.functional.mse_loss(vt, ut)
@@ -185,17 +176,12 @@ def train(exp_path: str, config: TrainingConfig):
         augmentation_params = batch.augmentation_params.to(device)
         noisy = test_augments.augment(clean, parameters=augmentation_params).clone()
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
-            x_noisy = 0.5 * codec.normalize(codec.encode(noisy))
+            x_noisy = codec.normalize(codec.encode(noisy))
 
-        x_0 = cflow_matcher.sigma_0 * torch.randn_like(x_noisy)
         timesteps = torch.linspace(0, 1, config.n_cfm_steps).tolist()
-        x_cleaned = cflow_matcher.sample(
-            x_0=x_0,
-            x_cond=x_noisy,
-            timesteps=timesteps,
-        )
+        x_cleaned = cflow_matcher.sample(x_0=x_noisy, timesteps=timesteps)
         with torch.no_grad():
-            cleaned = codec.decode(2 * codec.unnormalize(x_cleaned))
+            cleaned = codec.decode(codec.unnormalize(x_cleaned))
         return noisy, cleaned
 
     @torch.inference_mode()
@@ -215,9 +201,9 @@ def train(exp_path: str, config: TrainingConfig):
         with torch.no_grad():
             reconstructed = codec.reconstruct(clean[None])[0]
         noise = params.params[1].params[params.params[1].choice.item()].noise
-        log_waveform(clean, f"2clean/{i}", 0)
-        log_waveform(noise, f"3noise/{i}", 0)
-        log_waveform(reconstructed, f"4reconstructed/{i}", 0)
+        log_waveform(clean, f"{i}/clean", 0)
+        log_waveform(noise, f"{i}/noise", 0)
+        log_waveform(reconstructed, f"{i}/reconstructed", 0)
 
     step, best_loss = 0, torch.inf
     while step < config.max_steps:
@@ -226,9 +212,9 @@ def train(exp_path: str, config: TrainingConfig):
                 cflow_matcher.eval()
                 noisy, cleaned = sample(smp_batch)
                 for i, (x, y_hat) in enumerate(zip(noisy, cleaned)):
-                    log_waveform(y_hat, f"0cleaned/{i}", step)
+                    log_waveform(y_hat, f"{i}/cleaned", step)
                     if step == 0:
-                        log_waveform(x, f"1noisy/{i}", step)
+                        log_waveform(x, f"{i}/noisy", step)
 
             if step % config.val_steps == 0:
                 vpbar = tqdm(total=len(valid_dloader), leave=False)

@@ -82,7 +82,6 @@ class UNET1dDims:
     in_dim: int
     dim: int
     t_dim: int
-    c_dim: int
 
 
 class UNET1d(nn.Module):
