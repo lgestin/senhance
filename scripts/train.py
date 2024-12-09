@@ -200,9 +200,7 @@ def train(exp_path: str, config: TrainingConfig):
     ):
         with torch.no_grad():
             reconstructed = codec.reconstruct(clean[None])[0]
-        noise = params.params[1].params[params.params[1].choice.item()].noise
         log_waveform(clean, f"{i}/clean", 0)
-        log_waveform(noise, f"{i}/noise", 0)
         log_waveform(reconstructed, f"{i}/reconstructed", 0)
 
     step, best_loss = 0, torch.inf
@@ -211,9 +209,10 @@ def train(exp_path: str, config: TrainingConfig):
             if step % config.smp_steps == 0:
                 cflow_matcher.eval()
                 noisy, cleaned = sample(smp_batch)
-                for i, (x, y_hat) in enumerate(zip(noisy, cleaned)):
+                for i, (x, y_hat, clean) in enumerate(zip(noisy, cleaned, smp_batch.waveforms)):
                     log_waveform(y_hat, f"{i}/cleaned", step)
                     if step == 0:
+                        log_waveform(x - clean, f"{i}/noise", step)
                         log_waveform(x, f"{i}/noisy", step)
 
             if step % config.val_steps == 0:
