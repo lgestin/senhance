@@ -3,16 +3,19 @@ import torchaudio.functional as F
 import soundfile as sf
 
 
-def load_audio(path: str, start: int = 0, end: int = None):
+def load_audio(path: str, start: int = 0, end: int = None, dtype=torch.float32):
     num_frames = -1 if end is None else end - start
-    audio, sr = sf.read(
-        path,
-        start=start,
-        frames=num_frames,
-        dtype="float32",
-        always_2d=True,
-    )
+    with open(path, "rb") as audio_file:
+        audio, sr = sf.read(
+            audio_file,
+            start=start,
+            frames=num_frames,
+            dtype="int16",
+            always_2d=True,
+        )
+    audio = audio / 2**15
     audio = torch.from_numpy(audio.T)
+    audio = audio.to(dtype)
     return audio, sr
 
 

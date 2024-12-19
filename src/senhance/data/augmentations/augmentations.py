@@ -7,7 +7,8 @@ from senhance.data.audio import Audio
 
 @dataclass
 class AugmentationParameters:
-    apply: torch.BoolTensor = field(default_factory=lambda: torch.as_tensor(True))
+    apply: torch.BoolTensor = field(
+        default_factory=lambda: torch.as_tensor(True))
 
     @classmethod
     def collate(
