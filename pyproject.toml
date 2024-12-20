@@ -13,6 +13,18 @@ keywords = []
 authors = [
   { name = "lgestin", email = "lucas.gestin.pro@gmail.com" },
 ]
+installer = "uv"
+dependencies = [
+  "pyarrow",
+  "torch>=2.5.0",
+  "torchaudio>=2.5.0",
+  "torchvision",
+  "tqdm",
+  "simple-parsing",
+  "moshi",
+  "descript-audio-codec",
+]
+
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
@@ -25,21 +37,12 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
-[tool.hatch.envs.default]
-installer = "pip"
-dependencies = [
-  "torch==2.5.0",
-  "torchaudio==2.5.0",
-  "torchvision",
-  "tqdm",
-  "tensorboard",
-  "simple-parsing",
-  "moshi",
-  "descript-audio-codec",
-]
+[tool.hatch.build.target.wheel]
+packages = ["src/senhance"]
 
-[tool.hatch.envs.dev]
+[tool.hatch.envs.default]
 extra-dependencies = [
+  "tensorboard",
   "pytest",
   "ruff",
   "black[jupyter]",
@@ -48,6 +51,12 @@ extra-dependencies = [
   "ipykernel",
   "matplotlib",
   "seaborn",
+]
+
+[tool.hatch.envs.hatch-test]
+# parallel = true
+extra-dependencies = [
+  "librosa==0.10.2", # resolve incompat from dac
 ]
 
 
@@ -77,3 +86,7 @@ exclude_lines = [
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
 ]
+
+[tool.ruff]
+line-length = 80
+indent-width = 4

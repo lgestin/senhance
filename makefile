@@ -4,4 +4,4 @@ format:
 	black .
 
 test:
-	hatch -e dev run pytest
+	hatch run pytest
