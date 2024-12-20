@@ -83,7 +83,8 @@ class Phaser(Augmentation):
             + self.min_delay_ms
         )
         decay = (
-            torch.rand(tuple(), generator=generator) * (self.max_decay - self.min_decay)
+            torch.rand(tuple(), generator=generator)
+            * (self.max_decay - self.min_decay)
             + self.min_decay
         )
         mod_speed = (
@@ -117,9 +118,16 @@ class Phaser(Augmentation):
 
         apply = parameters.apply
         sample_rate = parameters.sample_rate.unique().item()
-        augmented = waveform.clone()
         augmented = []
-        for wav, gain_in, gain_out, delay_ms, decay, mod_speed, sinusoidal in zip(
+        for (
+            wav,
+            gain_in,
+            gain_out,
+            delay_ms,
+            decay,
+            mod_speed,
+            sinusoidal,
+        ) in zip(
             waveform[apply],
             parameters.gain_in[apply],
             parameters.gain_out[apply],

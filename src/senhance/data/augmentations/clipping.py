@@ -61,6 +61,5 @@ class Clipping(Augmentation):
         ]
         quantile = torch.stack(quantile)
 
-        augmented = waveform.clone()
-        augmented[apply] = sign * waveform[apply].abs().clamp(max=quantile)
-        return augmented
+        waveform[apply] = sign * waveform[apply].abs().clamp(max=quantile)
+        return waveform

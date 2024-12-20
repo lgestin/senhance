@@ -42,7 +42,9 @@ class Speed(Augmentation):
             + self.min_factor
         )
         sample_rate = audio.sample_rate
-        return SpeedParameters(apply=apply, factor=factor, sample_rate=sample_rate)
+        return SpeedParameters(
+            apply=apply, factor=factor, sample_rate=sample_rate
+        )
 
     @torch.inference_mode()
     def augment(
@@ -61,6 +63,9 @@ class Speed(Augmentation):
         assert parameters.factor.unique().shape[0] == 1
         factor = parameters.factor.unique().item()
 
-        augmented = waveform.clone()
-        augmented = F.speed(waveform=augmented, orig_freq=sample_rate, factor=factor)[0]
-        return augmented
+        waveform = F.speed(
+            waveform=waveform,
+            orig_freq=sample_rate,
+            factor=factor,
+        )[0]
+        return waveform

@@ -63,9 +63,8 @@ class Flanger(Augmentation):
 
         device = waveform.device
         apply = parameters.apply
-        augmented = waveform.clone()
-        augmented[apply] = F.flanger(
-            waveform=augmented[apply].cpu(),
+        waveform[apply] = F.flanger(
+            waveform=waveform[apply].cpu(),
             sample_rate=parameters.sample_rate[0],
             delay=self.delay,
             depth=self.depth,
@@ -76,4 +75,4 @@ class Flanger(Augmentation):
             modulation=self.modulation,
             interpolation=self.interpolation,
         ).to(device)
-        return augmented
+        return waveform

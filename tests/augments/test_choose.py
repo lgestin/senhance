@@ -1,9 +1,9 @@
 import torch
 
 from senhance.data.audio import Audio
-from senhance.data.augmentations.gaussian_noise import GaussianNoise
 from senhance.data.augmentations.chain import Chain
 from senhance.data.augmentations.choose import Choose
+from senhance.data.augmentations.gaussian_noise import GaussianNoise
 
 
 def test_choose():
@@ -20,15 +20,18 @@ def test_choose():
         p=0.5,
     )
 
-    excerpts = [audio.salient_excerpt(0.5, generator=generator) for _ in range(8)]
+    excerpts = [
+        audio.salient_excerpt(0.5, generator=generator) for _ in range(8)
+    ]
     waveforms = torch.stack([excerpt.waveform for excerpt in excerpts])
 
     augment_params = [
-        augment.sample_parameters(excerpt, generator=generator) for excerpt in excerpts
+        augment.sample_parameters(excerpt, generator=generator)
+        for excerpt in excerpts
     ]
     augment_params = augment_params[0].collate(augment_params)
 
-    augmented = augment.augment(waveforms, augment_params)
+    augmented = augment.augment(waveforms.clone(), augment_params)
     assert torch.is_tensor(augmented)
 
     apply = augment_params.apply
@@ -39,7 +42,7 @@ def test_choose():
 
     excerpt = excerpts[0]
     augment_params = augment.sample_parameters(excerpt, generator=generator)
-    augmented = augment.augment(excerpt.waveform[None], augment_params)
+    augmented = augment.augment(excerpt.waveform[None].clone(), augment_params)
     assert torch.is_tensor(augmented)
     if augment_params.apply:
         assert not torch.allclose(augmented, excerpt.waveform[None])

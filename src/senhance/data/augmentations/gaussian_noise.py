@@ -54,6 +54,7 @@ class GaussianNoise(Augmentation):
             return waveform
 
         apply = parameters.apply
-        augmented = waveform.clone()
-        augmented[apply] = parameters.amplitude[apply].view(-1, 1, 1) * augmented[apply]
-        return augmented
+        waveform[apply] = (
+            parameters.amplitude[apply].view(-1, 1, 1) * waveform[apply]
+        )
+        return waveform

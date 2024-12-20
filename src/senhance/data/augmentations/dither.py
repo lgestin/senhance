@@ -46,9 +46,8 @@ class Dither(Augmentation):
         apply = parameters.apply
         density_function = parameters.density_function[0]
 
-        augmented = waveform.clone()
-        augmented[apply] = F.dither(
-            waveform=augmented[apply],
+        waveform[apply] = F.dither(
+            waveform=waveform[apply],
             density_function=density_function,
         )
-        return augmented
+        return waveform

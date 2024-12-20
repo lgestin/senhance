@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 from collections import defaultdict
+from dataclasses import dataclass
 
 import torch
 
@@ -78,7 +78,9 @@ class Choose(Augmentation):
         generator: torch.Generator = None,
     ) -> ChooseParameters:
         apply = torch.rand(tuple(), generator=generator) <= self.p
-        choice = torch.multinomial(self.weights, 1, generator=generator).squeeze(0)
+        choice = torch.multinomial(
+            self.weights, 1, generator=generator
+        ).squeeze(0)
 
         params = [
             AugmentationParameters(apply=torch.as_tensor(False))
@@ -101,11 +103,10 @@ class Choose(Augmentation):
         if not torch.any(parameters.apply):
             return waveform
 
-        augmented = waveform.clone()
         for choice, params in parameters.params.items():
             apply = parameters.choice == choice
-            apply = apply.to(augmented.device)
-            augmented[apply] = self.augmentations[choice].augment(
-                augmented[apply], parameters=params
+            apply = apply.to(waveform.device)
+            waveform[apply] = self.augmentations[choice].augment(
+                waveform[apply], parameters=params
             )
-        return augmented
+        return waveform

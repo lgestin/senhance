@@ -56,7 +56,9 @@ class Audio:
         if waveform is None:
             sample_rate = self.sample_rate
             start = int(self.start_s * sample_rate)
-            end = int(self.end_s * sample_rate) if self.end_s is not None else -1
+            end = -1
+            if self.end_s:
+                end = int(self.end_s * sample_rate)
             waveform, sr = load_audio(self.filepath, start=start, end=end)
             self._waveform = waveform
             self._sample_rate = sr
@@ -147,7 +149,11 @@ class Audio:
         excerpt._loudness = self.loudness
         return excerpt
 
-    def random_excerpt(self, duration_s: float, generator: torch.Generator = None):
+    def random_excerpt(
+        self,
+        duration_s: float,
+        generator: torch.Generator = None,
+    ):
         assert duration_s <= self.duration_s
 
         offset_s = torch.rand(tuple(), generator=generator).item()
@@ -164,12 +170,18 @@ class Audio:
     ):
         assert 0.5 <= duration_s <= self.duration_s
         loudness = self.loudness
-        excerpt = self.random_excerpt(duration_s=duration_s, generator=generator)
+        excerpt = self.random_excerpt(
+            duration_s=duration_s,
+            generator=generator,
+        )
         excerpt._loudness = None
 
         n_try = 0
         while (excerpt.loudness < loudness_threshold) and (n_try < n_tries):
-            excerpt = self.random_excerpt(duration_s=duration_s, generator=generator)
+            excerpt = self.random_excerpt(
+                duration_s=duration_s,
+                generator=generator,
+            )
             excerpt._loudness = None
             n_try += 1
         excerpt._loudness = loudness

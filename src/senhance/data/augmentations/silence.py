@@ -40,6 +40,5 @@ class Silence(Augmentation):
             return waveform
 
         apply = parameters.apply
-        augmented = waveform.clone()
-        augmented[apply] = 0.0 * augmented[apply]
-        return augmented
+        waveform[apply] = 0.0 * waveform[apply]
+        return waveform

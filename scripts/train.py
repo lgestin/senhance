@@ -10,7 +10,7 @@ from tqdm import tqdm
 from senhance.data.augmentations.default import get_default_augmentation
 from senhance.data.collate import collate
 from senhance.data.dataset import AudioDataset
-from senhance.data.source import AudioSource
+from senhance.data.source import ArrowAudioSource
 from senhance.data.stft import MelSpectrogram
 from senhance.models.cfm.cfm import ConditionalFlowMatcher
 from senhance.models.checkpoint import Checkpoint
@@ -58,7 +58,12 @@ def train(exp_path: str, config: TrainingConfig):
     codec = codec.freeze()
     codec = codec.to(device)
     codec = torch.compile(codec, disable=not config.nocompile)
-    mel_spectrogram = MelSpectrogram(1024, 256, 80, sample_rate=config.sample_rate)
+    mel_spectrogram = MelSpectrogram(
+        n_fft=1024,
+        hop_length=256,
+        n_mels=80,
+        sample_rate=config.sample_rate,
+    )
     mel_spectrogram = mel_spectrogram.to(device)
 
     ### AUGMENTS
@@ -76,8 +81,8 @@ def train(exp_path: str, config: TrainingConfig):
     # SPEECH
     sr = config.sample_rate
     speech_folder = Path(config.speech_folder)
-    train_audio_source = AudioSource(
-        speech_folder / "index.train.json",
+    train_audio_source = ArrowAudioSource(
+        speech_folder / "data.train.arrow",
         sequence_length_s=sequence_length_s,
     )
     train_dataset = AudioDataset(
@@ -93,8 +98,8 @@ def train(exp_path: str, config: TrainingConfig):
         shuffle=True,
     )
 
-    valid_audio_source = AudioSource(
-        speech_folder / "index.valid.json",
+    valid_audio_source = ArrowAudioSource(
+        speech_folder / "data.valid.arrow",
         sequence_length_s=sequence_length_s,
     )
     valid_dataset = AudioDataset(
@@ -110,8 +115,8 @@ def train(exp_path: str, config: TrainingConfig):
         num_workers=config.n_workers,
     )
 
-    test_audio_source = AudioSource(
-        speech_folder / "index.test.json",
+    test_audio_source = ArrowAudioSource(
+        speech_folder / "data.test.arrow",
         sequence_length_s=sequence_length_s,
     )
     test_dataset = AudioDataset(
@@ -125,7 +130,11 @@ def train(exp_path: str, config: TrainingConfig):
         collate_fn=collate,
     )
 
-    unet_dims = UNET1dDims(in_dim=codec.dim, dim=config.n_dim, t_dim=config.n_dim)
+    unet_dims = UNET1dDims(
+        in_dim=codec.dim,
+        dim=config.n_dim,
+        t_dim=config.n_dim,
+    )
     unet = UNET1d(unet_dims)
     unet = unet.to(device)
     unet = torch.compile(unet, disable=not config.nocompile)
@@ -133,7 +142,11 @@ def train(exp_path: str, config: TrainingConfig):
     cflow_matcher = ConditionalFlowMatcher(unet)
     cflow_matcher = cflow_matcher.to(device)
 
-    opt = torch.optim.AdamW(cflow_matcher.parameters(), lr=config.lr, betas=(0.9, 0.99))
+    opt = torch.optim.AdamW(
+        cflow_matcher.parameters(),
+        lr=config.lr,
+        betas=(0.9, 0.99),
+    )
     scaler = torch.GradScaler()
 
     def process_batch(batch):
@@ -141,7 +154,8 @@ def train(exp_path: str, config: TrainingConfig):
 
         clean = batch.waveforms
         augmentation_params = batch.augmentation_params.to(device)
-        noisy = train_augments.augment(clean, parameters=augmentation_params)
+        noisy = clean.clone()
+        noisy = train_augments.augment(noisy, parameters=augmentation_params)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             with torch.no_grad():
                 x_clean = codec.normalize(codec.encode(clean))
@@ -160,7 +174,10 @@ def train(exp_path: str, config: TrainingConfig):
             opt.zero_grad()
             scaler.scale(loss).backward()
             scaler.unscale_(opt)
-            grad = torch.nn.utils.clip_grad_norm_(cflow_matcher.parameters(), 1e0)
+            grad = torch.nn.utils.clip_grad_norm_(
+                cflow_matcher.parameters(),
+                max_norm=1e0,
+            )
             scaler.step(opt)
             scaler.update()
 
@@ -172,9 +189,12 @@ def train(exp_path: str, config: TrainingConfig):
     @torch.inference_mode()
     def sample(batch):
         batch = batch.to(device)
-        clean = batch.waveforms.clone()
+        clean = batch.waveforms
         augmentation_params = batch.augmentation_params.to(device)
-        noisy = test_augments.augment(clean, parameters=augmentation_params).clone()
+        noisy = test_augments.augment(
+            waveform=clean.clone(),
+            parameters=augmentation_params,
+        )
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             x_noisy = codec.normalize(codec.encode(noisy))
 
@@ -209,7 +229,9 @@ def train(exp_path: str, config: TrainingConfig):
             if step % config.smp_steps == 0:
                 cflow_matcher.eval()
                 noisy, cleaned = sample(smp_batch)
-                for i, (x, y_hat, clean) in enumerate(zip(noisy, cleaned, smp_batch.waveforms)):
+                for i, (x, y_hat, clean) in enumerate(
+                    zip(noisy, cleaned, smp_batch.waveforms)
+                ):
                     log_waveform(y_hat, f"{i}/cleaned", step)
                     if step == 0:
                         log_waveform(x - clean, f"{i}/noise", step)
@@ -225,12 +247,15 @@ def train(exp_path: str, config: TrainingConfig):
                     for key, value in metrics.items():
                         val_metrics[key] += [value]
                     vpbar.update(1)
-                    vpbar.set_description_str(f"VALID {step} | {metrics['loss']:.4f}")
+                    vpbar.set_description_str(
+                        f"VALID {step} | {metrics['loss']:.4f}"
+                    )
                 del vbatch
                 vpbar.close()
 
                 val_metrics = {
-                    k: torch.stack(v).mean().item() for k, v in val_metrics.items()
+                    k: torch.stack(v).mean().item()
+                    for k, v in val_metrics.items()
                 }
                 for key, values in val_metrics.items():
                     writer.add_scalar(f"valid/{key}", values, step)

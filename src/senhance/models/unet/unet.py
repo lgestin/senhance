@@ -40,7 +40,9 @@ class TimestepAwareSequential(nn.Sequential, TimestepAwareModule):
 class Downsample(nn.Module):
     def __init__(self, dim: int, rate: int):
         super().__init__()
-        self.down = MPConv1d(dim, dim, kernel_size=2 * rate, stride=rate, padding=1)
+        self.down = MPConv1d(
+            dim, dim, kernel_size=2 * rate, stride=rate, padding=1
+        )
 
     def forward(self, x: torch.Tensor):
         return self.down(x)
@@ -165,7 +167,9 @@ class UNET1d(nn.Module):
 
         encoder = nn.ModuleList(
             [
-                TimestepAwareSequential(MPConv1d(in_dim + 1, dim, 3, padding=1)),
+                TimestepAwareSequential(
+                    MPConv1d(in_dim + 1, dim, 3, padding=1)
+                ),
                 EncoderBlock(dim),
                 EncoderBlock(dim),
                 EncoderBlock(dim),
@@ -248,9 +252,6 @@ class UNET1d(nn.Module):
             x = layer(x, emb)
             skips += [x]
 
-        import ipdb
-
-        ipdb.set_trace()
         emb = embs.pop()
         skips.pop()
         for layer, skip in zip(self.decoder, reversed(skips), strict=True):

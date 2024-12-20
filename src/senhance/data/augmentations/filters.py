@@ -20,7 +20,11 @@ class FilterParameters(AugmentationParameters):
 
 
 class Filter(Augmentation):
-    def __init__(self, freqs_hz: list[float] | torch.FloatTensor, p: float = 1.0):
+    def __init__(
+        self,
+        freqs_hz: list[float] | torch.FloatTensor,
+        p: float = 1.0,
+    ):
         super().__init__(p=p)
         if not torch.is_tensor(freqs_hz):
             freqs_hz = torch.as_tensor(freqs_hz)
@@ -65,24 +69,29 @@ class Filter(Augmentation):
         device = waveform.device
         apply = parameters.apply.to(device, non_blocking=True)
         freq_hz = parameters.freq_hz.to(device, non_blocking=True)
-        sample_rate = parameters.sample_rate.unique().to(device, non_blocking=True)
+        sample_rate = parameters.sample_rate.unique().to(
+            device, non_blocking=True
+        )
 
-        augmented = waveform.clone()
         for fhz in freq_hz[apply].unique():
             freq_mask = fhz == freq_hz
             freq_mask = freq_mask & apply
             if not torch.any(freq_mask):
                 continue
-            augmented[freq_mask] = self.filter_waveform(
-                waveform=augmented[freq_mask],
+            waveform[freq_mask] = self.filter_waveform(
+                waveform=waveform[freq_mask],
                 sample_rate=sample_rate,
                 freq_hz=fhz,
             )
-        return augmented
+        return waveform
 
 
 class LowPass(Filter):
-    def __init__(self, freqs_hz: list[float] | torch.FloatTensor, p: float = 1.0):
+    def __init__(
+        self,
+        freqs_hz: list[float] | torch.FloatTensor,
+        p: float = 1.0,
+    ):
         super().__init__(freqs_hz=freqs_hz, p=p)
 
     def filter_waveform(
@@ -100,7 +109,11 @@ class LowPass(Filter):
 
 
 class HighPass(Filter):
-    def __init__(self, freqs_hz: list[float] | torch.FloatTensor, p: float = 1.0):
+    def __init__(
+        self,
+        freqs_hz: list[float] | torch.FloatTensor,
+        p: float = 1.0,
+    ):
         super().__init__(freqs_hz=freqs_hz, p=p)
 
     def filter_waveform(

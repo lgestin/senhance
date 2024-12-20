@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from senhance.models.unet.magnitude_preserving import timestep_embedding
 from senhance.models.unet.unet import TimestepAwareModule, TimestepAwareSequential

@@ -74,18 +74,14 @@ class Chain(Augmentation):
             return waveform
 
         chain_apply = parameters.apply
-        augmented = waveform.clone()
-        # print(augmented.mean((1, 2)))
         for augmentation, params in zip(
             self.augmentations, parameters.params, strict=True
         ):
             apply = chain_apply & params.apply
             if not torch.any(apply):
                 continue
-            augmented[apply] = augmentation.augment(
-                waveform=augmented[apply],
+            waveform[apply] = augmentation.augment(
+                waveform=waveform[apply],
                 parameters=params[apply],
             )
-        # print(augmented.mean((1, 2)))
-        # print(chain_apply)
-        return augmented
+        return waveform
