@@ -48,6 +48,7 @@ class TrainingConfig:
 
 
 def train(exp_path: str, config: TrainingConfig):
+    torch.multiprocessing.set_sharing_strategy("file_system")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(device)
     device_dtype = device.type
