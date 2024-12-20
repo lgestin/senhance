@@ -2,24 +2,34 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
+from torch.nn.utils.parametrizations import weight_norm
 
 from senhance.models.unet.magnitude_preserving import timestep_embedding
-from senhance.models.unet.unet import TimestepAwareModule, TimestepAwareSequential
+from senhance.models.unet.unet import (
+    TimestepAwareModule,
+    TimestepAwareSequential,
+)
+
+
+class WNConv1d(nn.Conv1d):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        weight_norm(self)
 
 
 class Block(TimestepAwareModule):
     def __init__(self, dim: int):
         super().__init__()
-        self.emb = nn.Conv1d(4 * dim, dim, 1)
+        self.emb = WNConv1d(4 * dim, dim, 1)
         self.conv1 = nn.Sequential(
             nn.SiLU(),
-            nn.Conv1d(dim, dim, 3, dilation=3, padding=3),
+            WNConv1d(dim, dim, 3, dilation=3, padding=3),
             nn.SiLU(),
-            nn.Conv1d(dim, dim, 3, padding=1),
+            WNConv1d(dim, dim, 3, padding=1),
         )
         self.conv2 = nn.Sequential(
             nn.SiLU(),
-            nn.Conv1d(dim, dim, 3, padding=1),
+            WNConv1d(dim, dim, 3, padding=1),
         )
 
     def forward(self, x: torch.Tensor, emb: torch.Tensor):
@@ -35,7 +45,9 @@ class Block(TimestepAwareModule):
 class Downsample(nn.Module):
     def __init__(self, dim: int, rate: int):
         super().__init__()
-        self.down = nn.Conv1d(dim, dim, kernel_size=2 * rate, stride=rate, padding=1)
+        self.down = WNConv1d(
+            dim, dim, kernel_size=2 * rate, stride=rate, padding=1
+        )
 
     def forward(self, x: torch.Tensor):
         return self.down(x)
@@ -90,11 +102,11 @@ class UNET1d(nn.Module):
         in_dim, dim = dims.in_dim, dims.dim
         emb_dim = 4 * dim
 
-        self.t_emb = nn.Sequential(nn.Conv1d(dims.t_dim, emb_dim, 1), nn.SiLU())
+        self.t_emb = nn.Sequential(WNConv1d(dims.t_dim, emb_dim, 1), nn.SiLU())
 
         encoder = nn.ModuleList(
             [
-                TimestepAwareSequential(nn.Conv1d(in_dim, dim, 3, padding=1)),
+                TimestepAwareSequential(WNConv1d(in_dim, dim, 3, padding=1)),
                 EncoderBlock(dim),
                 EncoderBlock(dim),
                 EncoderBlock(dim),
@@ -141,7 +153,7 @@ class UNET1d(nn.Module):
                 DecoderBlock(dim),
                 TimestepAwareSequential(
                     DecoderBlock(dim),
-                    nn.Conv1d(dim, in_dim, 3, padding=1),
+                    WNConv1d(dim, in_dim, 3, padding=1),
                 ),
             ],
         )
