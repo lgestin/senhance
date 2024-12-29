@@ -7,7 +7,7 @@ import torch
 from senhance.data.audio import Audio, AudioInfo
 
 
-class AudioSource:
+class IndexAudioSource:
     def __init__(self, index_file: str, sequence_length_s: float = None):
         """
         index_file: str Path to a source file. A source file is a json.
@@ -48,10 +48,19 @@ class ArrowAudioSource:
             source = pa.ipc.open_file(arrow).read_all()
         self.source = source
 
+        indices = range(self.source.num_rows)
+        if sequence_length_s:
+            durations_s = source["duration_s"].to_pylist()
+            indices = filter(
+                lambda i: durations_s[i] >= sequence_length_s, indices
+            )
+        self.indices = list(indices)
+
     def __len__(self):
-        return self.source.num_rows
+        return len(self.indices)
 
     def __getitem__(self, idx: int) -> Audio:
+        idx = self.indices[idx]
         item = self.source.slice(idx, 1)
         filepath = item["filepath"].to_pylist()[0]
         filepath = (self.arrow_file.parent / filepath).as_posix()
