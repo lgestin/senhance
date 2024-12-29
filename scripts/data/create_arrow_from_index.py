@@ -1,16 +1,13 @@
-import torch
-import pyarrow as pa
-from collections import defaultdict
-import pandas as pd
 import json
-from pathlib import Path
-from tqdm import tqdm
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import pandas as pd
+import pyarrow as pa
+from tqdm import tqdm
+
 from senhance.data.utils import load_audio
-
-
-def load_audio_float16(path: str):
-    return load_audio(path, dtype=torch.float16)
 
 
 def create_arrow_from_index(
@@ -50,7 +47,7 @@ def create_arrow_from_index(
                 with ThreadPoolExecutor(n_workers) as executor:
                     for filepath in table.index:
                         jobs[filepath] = executor.submit(
-                            load_audio_float16, output_folder / filepath
+                            load_audio, output_folder / filepath
                         )
 
                     for filepath, job in jobs.items():

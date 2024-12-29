@@ -1,12 +1,13 @@
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import soundfile as sf
 import torch
 import torchaudio
 
-from senhance.data.utils import load_audio
+from senhance.data.utils import load_audio, resample
 
 
 @dataclass
@@ -20,7 +21,7 @@ class AudioInfo:
 class Audio:
     def __init__(
         self,
-        filepath: str = "",
+        filepath: str = None,
         waveform: torch.Tensor = None,
         sample_rate: int = None,
         start_s: float = 0,
@@ -89,8 +90,10 @@ class Audio:
     def loudness(self):
         loudness = self._loudness
         if loudness is None:
+            waveform = self.waveform
+            waveform = (torch.from_numpy(waveform) / 32678.0).float()
             loudness = torchaudio.functional.loudness(
-                self.waveform, sample_rate=self.sample_rate
+                waveform, sample_rate=self.sample_rate
             ).item()
         if math.isnan(loudness):
             loudness = -70.0
@@ -104,12 +107,13 @@ class Audio:
         return self
 
     def resample(self, sample_rate: int):
-        if sample_rate != self.sample_rate:
-            waveform = torchaudio.functional.resample(
-                self.waveform, orig_freq=self.sample_rate, new_freq=sample_rate
-            )
-            self._waveform = waveform
-            self._sample_rate = sample_rate
+        waveform = resample(
+            waveform=self.waveform,
+            orig_sr=self.sample_rate,
+            targ_sr=sample_rate,
+        )
+        self._waveform = waveform
+        self._sample_rate = sample_rate
         return self
 
     def normalize(self, db: float):

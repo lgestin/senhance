@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 
 from senhance.data.audio import Audio
@@ -7,10 +9,12 @@ from senhance.data.augmentations.augmentations import (
 from senhance.data.augmentations.reverb import Reverb
 from senhance.data.source import ArrowAudioSource
 
+test_file_path = Path(__file__).parent / "assets/physicsworks.wav"
+
 
 def test_reverb():
     generator = torch.Generator().manual_seed(42)
-    audio = Audio("/data/denoising/speech/daps/clean/f10_script1_clean.wav")
+    audio = Audio(test_file_path)
     ir_source = ArrowAudioSource(
         "/data/denoising/noise/irs/RoyJames/data.test.arrow"
     )

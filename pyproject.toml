@@ -15,6 +15,7 @@ authors = [
 ]
 installer = "uv"
 dependencies = [
+  "av",
   "pyarrow",
   "torch>=2.5.0",
   "torchaudio>=2.5.0",
@@ -40,8 +41,13 @@ classifiers = [
 [tool.hatch.build.target.wheel]
 packages = ["src/senhance"]
 
+
+[tool.hatch.envs.default.env-vars]
+PIP_NO_BINARY = "av"
+
 [tool.hatch.envs.default]
 extra-dependencies = [
+  "av",
   "tensorboard",
   "pytest",
   "ruff",
