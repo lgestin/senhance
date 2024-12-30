@@ -15,27 +15,20 @@ from senhance.data.augmentations.chain import Chain
 @dataclass(kw_only=True)
 class FilterParameters(AugmentationParameters):
     apply: torch.BoolTensor
-    freq_hz: torch.FloatTensor
     sample_rate: torch.FloatTensor
 
 
 class Filter(Augmentation):
-    def __init__(
-        self,
-        freqs_hz: list[float] | torch.FloatTensor,
-        p: float = 1.0,
-    ):
+    def __init__(self, freq_hz: float, p: float = 1.0):
         super().__init__(p=p)
-        if not torch.is_tensor(freqs_hz):
-            freqs_hz = torch.as_tensor(freqs_hz)
-        self.freqs_hz = freqs_hz
-        self.weights = torch.full((len(freqs_hz),), 1 / len(freqs_hz))
+        if not torch.is_tensor(freq_hz):
+            freq_hz = torch.as_tensor(freq_hz)
+        self.freq_hz = freq_hz
 
     def filter_waveform(
         self,
         waveform: torch.Tensor,
         sample_rate: int,
-        freq_hz: float,
     ) -> torch.Tensor:
         raise NotImplementedError
 
@@ -45,14 +38,8 @@ class Filter(Augmentation):
         generator: torch.Generator = None,
     ) -> FilterParameters:
         apply = torch.rand(tuple(), generator=generator) <= self.p
-        freq_idx = torch.multinomial(self.weights, 1).item()
-        freq_hz = self.freqs_hz[freq_idx]
         sample_rate = audio.sample_rate
-        return FilterParameters(
-            apply=apply,
-            freq_hz=freq_hz,
-            sample_rate=sample_rate,
-        )
+        return FilterParameters(apply=apply, sample_rate=sample_rate)
 
     @torch.inference_mode()
     def augment(
@@ -68,31 +55,23 @@ class Filter(Augmentation):
 
         device = waveform.device
         apply = parameters.apply.to(device, non_blocking=True)
-        freq_hz = parameters.freq_hz.to(device, non_blocking=True)
+        freq_hz = self.freq_hz.to(device, non_blocking=True)
         sample_rate = parameters.sample_rate.unique().to(
             device, non_blocking=True
         )
 
-        for fhz in freq_hz[apply].unique():
-            freq_mask = fhz == freq_hz
-            freq_mask = freq_mask & apply
-            if not torch.any(freq_mask):
-                continue
-            waveform[freq_mask] = self.filter_waveform(
-                waveform=waveform[freq_mask],
+        if torch.any(apply):
+            waveform[apply] = self.filter_waveform(
+                waveform=waveform[apply],
                 sample_rate=sample_rate,
-                freq_hz=fhz,
+                freq_hz=freq_hz,
             )
         return waveform
 
 
 class LowPass(Filter):
-    def __init__(
-        self,
-        freqs_hz: list[float] | torch.FloatTensor,
-        p: float = 1.0,
-    ):
-        super().__init__(freqs_hz=freqs_hz, p=p)
+    def __init__(self, freq_hz: float, p: float = 1.0):
+        super().__init__(freq_hz=freq_hz, p=p)
 
     def filter_waveform(
         self,
@@ -109,12 +88,8 @@ class LowPass(Filter):
 
 
 class HighPass(Filter):
-    def __init__(
-        self,
-        freqs_hz: list[float] | torch.FloatTensor,
-        p: float = 1.0,
-    ):
-        super().__init__(freqs_hz=freqs_hz, p=p)
+    def __init__(self, freq_hz: float, p: float = 1.0):
+        super().__init__(freq_hz=freq_hz, p=p)
 
     def filter_waveform(
         self,
@@ -131,8 +106,8 @@ class HighPass(Filter):
 
 
 class BandPass(Filter):
-    def __init__(self, bands_hz: list[tuple[float]], p: float = 1.0):
-        super().__init__(freqs_hz=bands_hz, p=p)
+    def __init__(self, bands_hz: tuple[float], p: float = 1.0):
+        super().__init__(freq_hz=bands_hz, p=p)
         self.bands_hz = bands_hz
 
     def filter_waveform(
@@ -151,7 +126,7 @@ class BandPass(Filter):
 
 
 class BandPassChain(Chain):
-    def __init__(self, bands_hz: list[tuple[float]], p: float = 1.0):
-        low_pass = LowPass([band_hz[0] for band_hz in bands_hz], p=1.0)
-        high_pass = HighPass([band_hz[1] for band_hz in bands_hz], p=1.0)
+    def __init__(self, band_hz: tuple[float], p: float = 1.0):
+        low_pass = LowPass(band_hz[0], p=1.0)
+        high_pass = HighPass(band_hz[1], p=1.0)
         super().__init__(low_pass, high_pass, p=p)

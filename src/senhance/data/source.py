@@ -20,11 +20,20 @@ class IndexAudioSource:
             index = json.load(f)
         self.index = index
 
+        indices = range(len(self.index))
+        if sequence_length_s:
+            durations_s = [item["duration_s"] for item in index]
+            indices = filter(
+                lambda i: durations_s[i] >= sequence_length_s, indices
+            )
+        self.indices = list(indices)
+
     def __len__(self):
-        return len(self.index)
+        return 1_000_000_000  # approx inifinite length
 
     def __getitem__(self, idx: int) -> Audio:
-        audioinfo = self.index[idx]
+        source_idx = self.indices[idx % len(self.indices)]
+        audioinfo = self.index[source_idx]
         audioinfo["filepath"] = self.index_file.parent / audioinfo["filepath"]
         audioinfo = AudioInfo(**audioinfo)
         audio = Audio.from_audioinfo(audioinfo)
@@ -57,11 +66,11 @@ class ArrowAudioSource:
         self.indices = list(indices)
 
     def __len__(self):
-        return len(self.indices)
+        return 1_000_000_000  # approx inifinite length
 
     def __getitem__(self, idx: int) -> Audio:
-        idx = self.indices[idx]
-        item = self.source.slice(idx, 1)
+        source_idx = self.indices[idx % len(self.indices)]
+        item = self.source.slice(source_idx, 1)
         filepath = item["filepath"].to_pylist()[0]
         filepath = (self.arrow_file.parent / filepath).as_posix()
         waveform = item["waveform"].to_numpy()[0]
@@ -69,10 +78,11 @@ class ArrowAudioSource:
         sample_rate = int(item["sample_rate"].to_pylist()[0])
 
         audio = Audio(
-            filepath=filepath, waveform=waveform, sample_rate=sample_rate
+            filepath=filepath,
+            waveform=waveform,
+            sample_rate=sample_rate,
         )
-
-        if self.sequence_length_s is not None:
+        if self.sequence_length_s:
             generator = torch.Generator().manual_seed(idx)
             audio = audio.salient_excerpt(
                 duration_s=self.sequence_length_s,

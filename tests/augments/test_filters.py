@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import torch
 
 from senhance.data.audio import Audio
@@ -7,11 +8,14 @@ from senhance.data.augmentations.filters import BandPassChain, HighPass, LowPass
 
 test_file_path = Path(__file__).parent.parent / "assets/physicsworks.wav"
 
+freqs_hz = [2000, 4000, 8000, 11025, 16000, 22050, 24000, 32000, 44100, 48000]
 
-def test_lowpass():
+
+@pytest.mark.parametrize("freq_hz", freqs_hz)
+def test_lowpass(freq_hz):
     generator = torch.Generator().manual_seed(42)
     audio = Audio(test_file_path)
-    augment = LowPass(freqs_hz=[2000, 4000, 8000, 16000], p=0.5)
+    augment = LowPass(freq_hz=freq_hz, p=0.5)
 
     excerpts = [
         audio.random_excerpt(0.5, generator=generator) for _ in range(8)
@@ -45,10 +49,11 @@ def test_lowpass():
         assert torch.allclose(augmented, waveform)
 
 
-def test_highpass():
+@pytest.mark.parametrize("freq_hz", freqs_hz)
+def test_highpass(freq_hz):
     generator = torch.Generator().manual_seed(42)
     audio = Audio(test_file_path)
-    augment = HighPass(freqs_hz=[2000, 4000, 8000, 16000], p=0.5)
+    augment = HighPass(freq_hz=freq_hz, p=0.5)
 
     excerpts = [
         audio.random_excerpt(0.5, generator=generator) for _ in range(8)
@@ -82,12 +87,14 @@ def test_highpass():
         assert torch.allclose(augmented, waveform)
 
 
-def test_bandpass():
+band_pass_freqs_hz = [(2000, 4000), (4000, 8000), (8000, 16000)]
+
+
+@pytest.mark.parametrize("band_pass_freqs_hz", band_pass_freqs_hz)
+def test_bandpass(band_pass_freqs_hz):
     generator = torch.Generator().manual_seed(42)
     audio = Audio(test_file_path)
-    augment = BandPassChain(
-        bands_hz=[[2000, 4000], [4000, 8000], [8000, 16000]], p=0.5
-    )
+    augment = BandPassChain(band_hz=band_pass_freqs_hz, p=0.5)
 
     excerpts = [
         audio.random_excerpt(0.5, generator=generator) for _ in range(8)
@@ -122,6 +129,6 @@ def test_bandpass():
 
 
 if __name__ == "__main__":
-    test_lowpass()
-    test_highpass()
-    test_bandpass()
+    test_lowpass(4000)
+    test_highpass(8000)
+    test_bandpass((4000, 8000))
