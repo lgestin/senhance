@@ -65,7 +65,7 @@ def get_default_augmentation(
     high_pass = Choose(high_passes, p=1.0)
 
     bands_hz = [(bef, aft) for bef, aft in zip(freqs_hz[:-1], freqs_hz[1:])]
-    band_passes = [BandPassChain(band_hz) for bands_hz in bands_hz]
+    band_passes = [BandPassChain(band_hz) for band_hz in bands_hz]
     band_pass = Choose(band_passes, p=1.0)
 
     filters = Choose(

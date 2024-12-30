@@ -5,32 +5,47 @@ from av.audio.frame import AudioFrame
 from av.audio.resampler import AudioResampler
 
 
-def load_audio(path: str, start: int = 0, end: int = None):
+def load_audio(
+    path: str,
+    sample_rate: int = None,
+    start: int = 0,
+    end: int = None,
+):
     num_frames = -1 if end is None else end - start
     with open(path, "rb") as audio_file:
-        audio, sr = sf.read(
+        waveform, sr = sf.read(
             audio_file,
             start=start,
             frames=num_frames,
             dtype="int16",
             always_2d=True,
         )
-        audio = np.transpose(audio)
-    return audio, sr
+        waveform = np.transpose(waveform)
+    if sample_rate:
+        waveform = resample(waveform, orig_sr=sr, targ_sr=sample_rate)
+    return waveform, sr
 
 
-def resample(waveform: np.ndarray, orig_sr: int, targ_sr: int):
-    assert waveform.dtype == np.int16
-    assert waveform.ndim == 2
+def av_resampler_layout_from_waveform(waveform: np.ndarray):
     assert 1 <= waveform.shape[0] <= 2
     if waveform.shape[0] == 1:
         layout = "mono"
     elif waveform.shape[0] == 2:
         layout = "stereo"
+    else:
+        raise ValueError
+    return layout
+
+
+def resample(waveform: np.ndarray, orig_sr: int, targ_sr: int):
+    assert isinstance(waveform, np.ndarray)
+    assert waveform.dtype == np.int16
+    assert waveform.ndim == 2
 
     if orig_sr == targ_sr:
         return waveform
 
+    layout = av_resampler_layout_from_waveform(waveform)
     resampler = AudioResampler(format="s16", layout=layout, rate=targ_sr)
     frame = AudioFrame.from_ndarray(waveform, layout=layout)
     frame.rate = orig_sr

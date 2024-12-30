@@ -2,6 +2,7 @@ import math
 from dataclasses import dataclass
 
 import torch
+import torch.nn.functional as F
 
 from senhance.data.audio import Audio, AudioInfo
 from senhance.data.augmentations.augmentations import (
@@ -64,10 +65,8 @@ class BackgroundNoise(Augmentation):
             noise = noise.mono().resample(audio.sample_rate)
             noise._waveform[..., : audio.waveform.shape[-1]]
             if noise.waveform.shape[-1] < audio.waveform.shape[-1]:
-                noise._waveform = torch.nn.functional.pad(
-                    noise._waveform,
-                    (0, audio.waveform.shape[-1] - noise.waveform.shape[-1]),
-                )
+                pad = audio.waveform.shape[-1] - noise.waveform.shape[-1]
+                noise._waveform = F.pad(noise._waveform, (0, pad))
         else:
             zeros = torch.zeros_like(audio.waveform)
             noise = Audio(waveform=zeros, sample_rate=audio.sample_rate)

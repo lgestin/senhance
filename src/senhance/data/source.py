@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pyarrow as pa
 import torch
 
@@ -20,13 +21,11 @@ class IndexAudioSource:
             index = json.load(f)
         self.index = index
 
-        indices = range(len(self.index))
+        indices = np.arange(len(self.index))
         if sequence_length_s:
-            durations_s = [item["duration_s"] for item in index]
-            indices = filter(
-                lambda i: durations_s[i] >= sequence_length_s, indices
-            )
-        self.indices = list(indices)
+            durations_s = source["duration_s"].to_numpy()
+            indices = indices[durations_s >= sequence_length_s]
+        self.indices = indices.tolist()
 
     def __len__(self):
         return 1_000_000_000  # approx inifinite length
@@ -57,13 +56,11 @@ class ArrowAudioSource:
             source = pa.ipc.open_file(arrow).read_all()
         self.source = source
 
-        indices = range(self.source.num_rows)
+        indices = np.arange(self.source.num_rows)
         if sequence_length_s:
-            durations_s = source["duration_s"].to_pylist()
-            indices = filter(
-                lambda i: durations_s[i] >= sequence_length_s, indices
-            )
-        self.indices = list(indices)
+            durations_s = source["duration_s"].to_numpy()
+            indices = indices[durations_s >= sequence_length_s]
+        self.indices = indices.tolist()
 
     def __len__(self):
         return 1_000_000_000  # approx inifinite length
@@ -74,7 +71,7 @@ class ArrowAudioSource:
         filepath = item["filepath"].to_pylist()[0]
         filepath = (self.arrow_file.parent / filepath).as_posix()
         waveform = item["waveform"].to_numpy()[0]
-        waveform = torch.from_numpy(waveform[None]).float()
+        waveform = torch.from_numpy(waveform)[None].float()
         sample_rate = int(item["sample_rate"].to_pylist()[0])
 
         audio = Audio(

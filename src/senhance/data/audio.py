@@ -1,11 +1,10 @@
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 
 import soundfile as sf
 import torch
-import torchaudio
+import torchaudio.functional as F
 
 from senhance.data.utils import load_audio, resample
 
@@ -22,14 +21,14 @@ class Audio:
     def __init__(
         self,
         filepath: str = None,
-        waveform: torch.Tensor = None,
+        waveform: torch.FloatTensor = None,
         sample_rate: int = None,
         start_s: float = 0,
         end_s: float = None,
     ):
         assert isinstance(filepath, (type(None), str, Path))
+        assert waveform is None or torch.is_tensor(waveform)
         if filepath is None:
-            assert torch.is_tensor(waveform)
             assert isinstance(sample_rate, int)
             assert waveform is not None and sample_rate is not None
 
@@ -41,7 +40,7 @@ class Audio:
         self._loudness = None
 
     def to(self, device: str | torch.device):
-        self._waveform = self.waveform.to(device)
+        self.waveform.to(device, non_blocking=True)
         return self
 
     @property
@@ -60,7 +59,13 @@ class Audio:
             end = -1
             if self.end_s:
                 end = int(self.end_s * sample_rate)
-            waveform, sr = load_audio(self.filepath, start=start, end=end)
+            waveform, sr = load_audio(
+                path=self.filepath,
+                sample_rate=sample_rate,
+                start=start,
+                end=end,
+            )
+            waveform = torch.from_numpy(waveform) / 32678.0
             self._waveform = waveform
             self._sample_rate = sr
         return waveform
@@ -91,10 +96,7 @@ class Audio:
         loudness = self._loudness
         if loudness is None:
             waveform = self.waveform
-            waveform = (torch.from_numpy(waveform) / 32678.0).float()
-            loudness = torchaudio.functional.loudness(
-                waveform, sample_rate=self.sample_rate
-            ).item()
+            loudness = F.loudness(waveform, sample_rate=self.sample_rate).item()
         if math.isnan(loudness):
             loudness = -70.0
         self._loudness = loudness
@@ -107,12 +109,15 @@ class Audio:
         return self
 
     def resample(self, sample_rate: int):
-        waveform = resample(
-            waveform=self.waveform,
+        waveform = self.waveform
+        waveform = (32678 * waveform).to(torch.int16).numpy()
+        resampled = resample(
+            waveform=waveform,
             orig_sr=self.sample_rate,
             targ_sr=sample_rate,
         )
-        self._waveform = waveform
+        resampled = torch.from_numpy(resampled) / 32678.0
+        self._waveform = resampled
         self._sample_rate = sample_rate
         return self
 

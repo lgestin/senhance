@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field, fields
 
+import numpy as np
 import torch
 
 from senhance.data.audio import Audio
@@ -7,7 +8,9 @@ from senhance.data.audio import Audio
 
 @dataclass
 class AugmentationParameters:
-    apply: torch.BoolTensor = field(default_factory=lambda: torch.as_tensor(True))
+    apply: torch.BoolTensor = field(
+        default_factory=lambda: torch.as_tensor(True)
+    )
 
     @classmethod
     def collate(
@@ -29,7 +32,8 @@ class BatchAugmentationParameters:
 
     def _validate_parameters(self):
         are_all_params_same = all(
-            isinstance(param, type(self._parameters[0])) for param in self._parameters
+            isinstance(param, type(self._parameters[0]))
+            for param in self._parameters
         )
         assert are_all_params_same, "All parameters must be of the same type"
 
@@ -41,7 +45,9 @@ class BatchAugmentationParameters:
 
     @staticmethod
     def _collate_values(values: list):
-        if torch.is_tensor(values[0]):
+        if isinstance(values[0], np.ndarray):
+            batch = np.stack(values)
+        elif torch.is_tensor(values[0]):
             batch = torch.stack(values)
         elif isinstance(values[0], (int, float, bool)):
             batch = torch.as_tensor(values)
@@ -61,7 +67,9 @@ class BatchAugmentationParameters:
         elif torch.is_tensor(idx):
             assert idx.ndim == 1
             parameters = [
-                param for param, apply in zip(self._parameters, idx) if apply.item()
+                param
+                for param, apply in zip(self._parameters, idx)
+                if apply.item()
             ]
             item = self.__class__(parameters=parameters)
         return item
@@ -89,7 +97,9 @@ class BatchAugmentationParameters:
 
     @classmethod
     def collate(cls, parameters: list[AugmentationParameters]):
-        assert all(isinstance(param, parameters[0].__class__) for param in parameters)
+        assert all(
+            isinstance(param, parameters[0].__class__) for param in parameters
+        )
         # parameters = cls(parameters)
         parameters = parameters[0].collate(parameters)
         return parameters

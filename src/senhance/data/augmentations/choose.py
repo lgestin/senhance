@@ -1,3 +1,4 @@
+import math
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -61,7 +62,7 @@ class Choose(Augmentation):
 
         assert weights.ndim == 1
         assert weights.shape[0] == n
-        assert weights.sum().item() == 1.0
+        assert math.isclose(weights.sum().item(), 1.0, abs_tol=1e-6)
         self.weights = weights
 
         self.augmentations = augmentations

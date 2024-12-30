@@ -9,7 +9,7 @@ from senhance.data.augmentations.augmentations import (
     AugmentationParameters,
     BatchAugmentationParameters,
 )
-from senhance.data.source import AudioSource
+from senhance.data.source import ArrowAudioSource
 
 
 @dataclass
@@ -29,7 +29,9 @@ class Batch:
     def to(self, device: str | torch.device):
         for field in fields(self):
             value = getattr(self, field.name)
-            if torch.is_tensor(value) or isinstance(value, BatchAugmentationParameters):
+            if torch.is_tensor(value) or isinstance(
+                value, BatchAugmentationParameters
+            ):
                 value = value.to(device, non_blocking=True)
                 setattr(self, field.name, value)
         return self
@@ -38,7 +40,7 @@ class Batch:
 class AudioDataset(Dataset):
     def __init__(
         self,
-        audio_source: AudioSource,
+        audio_source: ArrowAudioSource,
         sample_rate: int,
         augmentation: Augmentation = None,
     ):
@@ -59,4 +61,8 @@ class AudioDataset(Dataset):
                 audio=audio,
                 generator=torch.Generator().manual_seed(idx),
             )
-        return Sample(idx=idx, audio=audio, augmentation_params=augmentation_params)
+        return Sample(
+            idx=idx,
+            audio=audio,
+            augmentation_params=augmentation_params,
+        )
