@@ -21,8 +21,6 @@ class FilterParameters(AugmentationParameters):
 class Filter(Augmentation):
     def __init__(self, freq_hz: float, p: float = 1.0):
         super().__init__(p=p)
-        if not torch.is_tensor(freq_hz):
-            freq_hz = torch.as_tensor(freq_hz)
         self.freq_hz = freq_hz
 
     def filter_waveform(
@@ -55,7 +53,6 @@ class Filter(Augmentation):
 
         device = waveform.device
         apply = parameters.apply.to(device, non_blocking=True)
-        freq_hz = self.freq_hz.to(device, non_blocking=True)
         sample_rate = parameters.sample_rate.unique().to(
             device, non_blocking=True
         )
@@ -64,7 +61,7 @@ class Filter(Augmentation):
             waveform[apply] = self.filter_waveform(
                 waveform=waveform[apply],
                 sample_rate=sample_rate,
-                freq_hz=freq_hz,
+                freq_hz=self.freq_hz,
             )
         return waveform
 
