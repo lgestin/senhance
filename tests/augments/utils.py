@@ -11,9 +11,7 @@ def _test_augment(augment: Augmentation, audio: Audio):
     excerpts = [
         audio.random_excerpt(0.5, generator=generator) for _ in range(8)
     ]
-    waveforms = [excerpt.waveform for excerpt in excerpts]
-    waveforms = [torch.from_numpy(waveform) / 32678.0 for waveform in waveforms]
-    waveforms = torch.stack(waveforms)
+    waveforms = torch.stack([excerpt.waveform for excerpt in excerpts])
 
     augment_params = [
         augment.sample_parameters(excerpt, generator=generator)
