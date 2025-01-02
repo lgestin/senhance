@@ -70,13 +70,25 @@ def train(exp_path: str, config: TrainingConfig):
     ### AUGMENTS
     sequence_length_s = config.sequence_length_n_tokens / codec.resolution_hz
     train_augments = get_default_augmentation(
-        sequence_length_s=sequence_length_s, split="train", p=0.95
+        noise_folder="/data/denoising/noise/",
+        sample_rate=config.sample_rate,
+        sequence_length_s=sequence_length_s,
+        split="train",
+        p=0.95,
     )
     valid_augments = get_default_augmentation(
-        sequence_length_s=sequence_length_s, split="valid", p=0.95
+        noise_folder="/data/denoising/noise/",
+        sample_rate=config.sample_rate,
+        sequence_length_s=sequence_length_s,
+        split="valid",
+        p=0.95,
     )
     test_augments = get_default_augmentation(
-        sequence_length_s=sequence_length_s, split="test", p=1.0
+        noise_folder="/data/denoising/noise/",
+        sample_rate=config.sample_rate,
+        sequence_length_s=sequence_length_s,
+        split="test",
+        p=1.0,
     )
 
     # SPEECH
@@ -215,7 +227,6 @@ def train(exp_path: str, config: TrainingConfig):
 
     smp_batch = next(iter(test_dloader)).to(device)
     writer = SummaryWriter(exp_path)
-    pbar = tqdm(total=config.max_steps)
     for i, (clean, params) in enumerate(
         zip(smp_batch.waveforms, smp_batch.augmentation_params)
     ):
@@ -224,6 +235,7 @@ def train(exp_path: str, config: TrainingConfig):
         log_waveform(clean, f"{i}/clean", 0)
         log_waveform(reconstructed, f"{i}/reconstructed", 0)
 
+    pbar = tqdm(total=config.max_steps)
     step, best_loss = 0, torch.inf
     while step < config.max_steps:
         for batch in train_dloader:

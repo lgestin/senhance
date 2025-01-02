@@ -27,13 +27,13 @@ def get_default_augmentation(
     )
     urabansound8k = ArrowAudioSource(
         arrow_file=urbansound8k_path.as_posix(),
-        sequence_length_s=sequence_length_s,
+        sequence_length_s=sequence_length_s + 0.1,
     )
 
     fsdnoisy18k_path = noise_folder / f"records/fsdnoisy18k/data.{split}.arrow"
     fsdnoisy18k = ArrowAudioSource(
         arrow_file=fsdnoisy18k_path.as_posix(),
-        sequence_length_s=sequence_length_s,
+        sequence_length_s=sequence_length_s + 0.1,
     )
     background_noise = Choose(
         BackgroundNoise(
@@ -77,11 +77,10 @@ def get_default_augmentation(
         p=0.6,
     )
     augmentation = Chain(
-        silence,
-        # background_noise,
+        # silence,
+        background_noise,
         reverb,
         filters,
         p=p,
     )
-    augmentation = background_noise
     return augmentation
