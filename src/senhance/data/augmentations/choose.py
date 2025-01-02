@@ -35,7 +35,7 @@ class BatchChooseParameters(BatchAugmentationParameters):
             apply[i] = params.apply
             choices[i] = params.choice
             choice = params.choice.item()
-            choices_params[choice].append(params.params[choice])
+            choices_params[choice].append(params.params)
 
         choices_params = {
             choice: params[0].collate(params)
@@ -59,10 +59,12 @@ class Choose(Augmentation):
             weights = torch.full((n,), 1 / n)
         if not torch.is_tensor(weights):
             weights = torch.as_tensor(weights)
+            weights /= weights.sum()
+        weights = weights.cumsum(0)
 
         assert weights.ndim == 1
         assert weights.shape[0] == n
-        assert math.isclose(weights.sum().item(), 1.0, abs_tol=1e-6)
+        assert math.isclose(weights[-1].item(), 1.0, abs_tol=1e-6)
         self.weights = weights
 
         self.augmentations = augmentations
@@ -79,19 +81,21 @@ class Choose(Augmentation):
         generator: torch.Generator = None,
     ) -> ChooseParameters:
         apply = torch.rand(tuple(), generator=generator) <= self.p
-        choice = torch.multinomial(
-            self.weights, 1, generator=generator
-        ).squeeze(0)
-
-        params = [
-            AugmentationParameters(apply=torch.as_tensor(False))
-            for _ in self.augmentations
-        ]
-        params[choice] = self.augmentations[choice.item()].sample_parameters(
+        choice = torch.searchsorted(
+            self.weights, torch.rand(tuple(), generator=generator)
+        )
+        chosen = self.augmentations[choice.item()]
+        chosen_params = chosen.sample_parameters(
             audio=audio, generator=generator
         )
-        params[choice].apply = params[choice].apply & apply
-        return ChooseParameters(apply=apply, choice=choice, params=params)
+        apply &= chosen_params.apply
+        chosen_params.apply &= apply
+        params = ChooseParameters(
+            apply=apply,
+            choice=choice,
+            params=chosen_params,
+        )
+        return params
 
     def augment(
         self,
@@ -104,9 +108,9 @@ class Choose(Augmentation):
         if not torch.any(parameters.apply):
             return waveform
 
+        parameters.choice.to(waveform.device, non_blocking=True)
         for choice, params in parameters.params.items():
             apply = parameters.choice == choice
-            apply = apply.to(waveform.device)
             waveform[apply] = self.augmentations[choice].augment(
                 waveform[apply], parameters=params
             )
