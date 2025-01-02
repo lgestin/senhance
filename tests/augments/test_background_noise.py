@@ -1,3 +1,5 @@
+import pytest
+
 from senhance.data.audio import Audio
 from senhance.data.augmentations.background_noise import BackgroundNoise
 from senhance.data.source import ArrowAudioSource
@@ -10,7 +12,7 @@ from .utils import _test_augment
 def test_background_noise(audio_file_path):
     audio = Audio(audio_file_path)
     noise_source = ArrowAudioSource(
-        arrow_file="/data/denoising/noise/records/urbansound8k/data.train.arrow"
+        arrow_file="/data/denoising/noise/records/urbansound8k/data.test.arrow"
     )
     augment = BackgroundNoise(
         noise_source=noise_source,

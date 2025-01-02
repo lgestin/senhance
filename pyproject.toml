@@ -24,6 +24,7 @@ dependencies = [
   "simple-parsing",
   "moshi",
   "descript-audio-codec",
+  "numba>=0.58.0"
 ]
 
 classifiers = [
@@ -42,12 +43,8 @@ classifiers = [
 packages = ["src/senhance"]
 
 
-[tool.hatch.envs.default.env-vars]
-PIP_NO_BINARY = "av"
-
 [tool.hatch.envs.default]
 extra-dependencies = [
-  "av",
   "tensorboard",
   "pytest",
   "ruff",
@@ -58,13 +55,6 @@ extra-dependencies = [
   "matplotlib",
   "seaborn",
 ]
-
-[tool.hatch.envs.hatch-test]
-# parallel = true
-extra-dependencies = [
-  "librosa==0.10.2", # resolve incompat from dac
-]
-
 
 [project.urls]
 Documentation = "https://github.com/lgestin/senhance#readme"

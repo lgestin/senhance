@@ -24,6 +24,7 @@ def _test_augment(augment: Augmentation, audio: Audio):
 
     apply = augment_params.apply
     for wav, aug in zip(waveforms[apply], augmented[apply]):
+        assert not torch.any(torch.isnan(aug))
         assert not torch.allclose(wav, aug)
     for wav, aug in zip(waveforms[~apply], augmented[~apply]):
         assert torch.allclose(wav, aug)

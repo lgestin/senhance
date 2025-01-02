@@ -13,6 +13,7 @@ from senhance.data.source import ArrowAudioSource
 
 def get_default_augmentation(
     noise_folder: str,
+    sample_rate: int,
     sequence_length_s: float,
     split: str,
     p: float,
@@ -56,17 +57,17 @@ def get_default_augmentation(
         weights=[1.0],
         p=0.4,
     )
-    freqs_hz = torch.linspace(2000, 12000, 10).tolist()
+    freqs_hz = torch.linspace(sample_rate // 4, sample_rate // 2, 10).tolist()
 
     low_passes = [LowPass(freq_hz=freq_hz) for freq_hz in freqs_hz]
-    low_pass = Choose(low_passes, p=1.0)
+    low_pass = Choose(*low_passes, p=1.0)
 
     high_passes = [HighPass(freq_hz=freq_hz) for freq_hz in freqs_hz]
-    high_pass = Choose(high_passes, p=1.0)
+    high_pass = Choose(*high_passes, p=1.0)
 
     bands_hz = [(bef, aft) for bef, aft in zip(freqs_hz[:-1], freqs_hz[1:])]
     band_passes = [BandPassChain(band_hz) for band_hz in bands_hz]
-    band_pass = Choose(band_passes, p=1.0)
+    band_pass = Choose(*band_passes, p=1.0)
 
     filters = Choose(
         low_pass,
@@ -82,5 +83,5 @@ def get_default_augmentation(
         filters,
         p=p,
     )
-    # augmentation = background_noise
+    augmentation = background_noise
     return augmentation

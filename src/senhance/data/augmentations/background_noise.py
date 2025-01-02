@@ -69,7 +69,11 @@ class BackgroundNoise(Augmentation):
                 noise._waveform = F.pad(noise._waveform, (0, pad))
         else:
             zeros = torch.zeros_like(audio.waveform)
-            noise = Audio(waveform=zeros, sample_rate=audio.sample_rate)
+            noise = Audio(
+                filepath="",
+                waveform=zeros,
+                sample_rate=audio.sample_rate,
+            )
             noise._loudness = -70.0
 
         snr = truncated_normal(

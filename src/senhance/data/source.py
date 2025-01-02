@@ -21,11 +21,13 @@ class IndexAudioSource:
             index = json.load(f)
         self.index = index
 
-        indices = np.arange(len(self.index))
+        indices = range(len(self.index))
         if sequence_length_s:
-            durations_s = source["duration_s"].to_numpy()
-            indices = indices[durations_s >= sequence_length_s]
-        self.indices = indices.tolist()
+            durations_s = [item["duration_s"] for item in index]
+            indices = filter(
+                lambda i: durations_s[i] >= sequence_length_s, indices
+            )
+        self.indices = list(indices)
 
     def __len__(self):
         return 1_000_000_000  # approx inifinite length

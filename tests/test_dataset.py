@@ -1,9 +1,9 @@
 from senhance.data.dataset import AudioDataset
-from senhance.data.source import AudioSource
+from senhance.data.source import IndexAudioSource
 
 
 def test_denoising_dataset():
-    audio_source = AudioSource("/data/denoising/speech/daps/index.json")
+    audio_source = IndexAudioSource("/data/denoising/speech/daps/index.json")
 
     dataset = AudioDataset(audio_source=audio_source, sample_rate=16_000)
 

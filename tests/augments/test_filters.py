@@ -15,7 +15,8 @@ def test_lowpass(audio_file_path, freq_hz):
     audio = Audio(audio_file_path)
     augment = LowPass(freq_hz=freq_hz, p=0.5)
 
-    _test_augment(augment, audio)
+    if freq_hz <= audio.sample_rate // 2:
+        _test_augment(augment, audio)
 
 
 @pytest.mark.parametrize("audio_file_path", AUDIO_TEST_FILES)
@@ -24,7 +25,8 @@ def test_highpass(audio_file_path, freq_hz):
     audio = Audio(audio_file_path)
     augment = HighPass(freq_hz=freq_hz, p=0.5)
 
-    _test_augment(augment=augment, audio=audio)
+    if freq_hz <= audio.sample_rate // 2:
+        _test_augment(augment=augment, audio=audio)
 
 
 band_pass_freqs_hz = [(2000, 4000), (4000, 8000), (8000, 16000)]
@@ -36,7 +38,8 @@ def test_bandpass(audio_file_path, band_pass_freqs_hz):
     audio = Audio(audio_file_path)
     augment = BandPassChain(band_hz=band_pass_freqs_hz, p=0.5)
 
-    _test_augment(augment=augment, audio=audio)
+    if band_pass_freqs_hz[1] <= audio.sample_rate // 2:
+        _test_augment(augment=augment, audio=audio)
 
 
 if __name__ == "__main__":

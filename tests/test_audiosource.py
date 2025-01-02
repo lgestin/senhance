@@ -1,8 +1,8 @@
-from senhance.data.source import AudioSource
+from senhance.data.source import IndexAudioSource
 
 
 def test_audiosource():
-    asource = AudioSource("/data/denoising/speech/daps/index.json")
+    asource = IndexAudioSource("/data/denoising/speech/daps/index.json")
 
     item = asource[0]
     assert item
@@ -11,7 +11,7 @@ def test_audiosource():
     assert length
 
     sequence_length_s = 0.5
-    asource = AudioSource(
+    asource = IndexAudioSource(
         "/data/denoising/speech/daps/index.json",
         sequence_length_s=sequence_length_s,
     )
