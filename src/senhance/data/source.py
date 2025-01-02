@@ -30,7 +30,7 @@ class IndexAudioSource:
         self.indices = list(indices)
 
     def __len__(self):
-        return 1_000_000_000  # approx inifinite length
+        return 10_000_000  # approx inifinite length
 
     def __getitem__(self, idx: int) -> Audio:
         source_idx = self.indices[idx % len(self.indices)]
@@ -65,7 +65,7 @@ class ArrowAudioSource:
         self.indices = indices.tolist()
 
     def __len__(self):
-        return 1_000_000_000  # approx inifinite length
+        return 10_000_000  # approx inifinite length
 
     def __getitem__(self, idx: int) -> Audio:
         source_idx = self.indices[idx % len(self.indices)]
