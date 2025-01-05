@@ -1,3 +1,6 @@
+import re
+import shlex
+import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -296,6 +299,12 @@ def train(exp_path: str, config: TrainingConfig):
             metrics = process_batch(batch)
 
             pbar.set_description_str(f"TRAIN {step} | {metrics['loss']:.4f}")
+            shm_size = shlex.split("df -h /dev/shm")
+            shm_size = subprocess.run(
+                shm_size, stdout=subprocess.PIPE
+            ).stdout.decode("utf-8")
+            shm_size = float(re.findall(r"\s(\d)%\s", shm_size)[0])
+            writer.add_scalar("train/shm_size", shm_size, global_step=step)
             for key, val in metrics.items():
                 writer.add_scalar(f"train/{key}", val, global_step=step)
             pbar.update(1)
