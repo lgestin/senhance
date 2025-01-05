@@ -28,54 +28,65 @@ def get_default_augmentation(
     urabansound8k = ArrowAudioSource(
         arrow_file=urbansound8k_path.as_posix(),
         sequence_length_s=sequence_length_s + 0.1,
+        is_speech=False,
     )
 
     fsdnoisy18k_path = noise_folder / f"records/fsdnoisy18k/data.{split}.arrow"
     fsdnoisy18k = ArrowAudioSource(
         arrow_file=fsdnoisy18k_path.as_posix(),
         sequence_length_s=sequence_length_s + 0.1,
+        is_speech=False,
     )
     background_noise = Choose(
         BackgroundNoise(
             urabansound8k,
             min_snr=5.0,
             max_snr=25.0,
+            name="urbansound8k",
         ),
         BackgroundNoise(
             fsdnoisy18k,
             min_snr=5.0,
             max_snr=25.0,
+            name="fsdnoisy_18k",
         ),
         weights=[0.33, 0.67],
+        name="background_noise",
         p=0.8,
     )
 
     roy_james_path = noise_folder / f"irs/RoyJames/data.{split}.arrow"
-    roy_james = ArrowAudioSource(arrow_file=roy_james_path.as_posix())
+    roy_james = ArrowAudioSource(
+        arrow_file=roy_james_path.as_posix(),
+        is_speech=False,
+    )
     reverb = Choose(
         Reverb(roy_james),
         weights=[1.0],
+        name="irs",
         p=0.4,
     )
     freqs_hz = torch.linspace(sample_rate // 4, sample_rate // 2, 10).tolist()
 
     low_passes = [LowPass(freq_hz=freq_hz) for freq_hz in freqs_hz]
-    low_pass = Choose(*low_passes, p=1.0)
+    low_pass = Choose(*low_passes, name="low_passes", p=1.0)
 
     high_passes = [HighPass(freq_hz=freq_hz) for freq_hz in freqs_hz]
-    high_pass = Choose(*high_passes, p=1.0)
+    high_pass = Choose(*high_passes, name="high_passes", p=1.0)
 
     bands_hz = [(bef, aft) for bef, aft in zip(freqs_hz[:-1], freqs_hz[1:])]
     band_passes = [BandPassChain(band_hz) for band_hz in bands_hz]
-    band_pass = Choose(*band_passes, p=1.0)
+    band_pass = Choose(*band_passes, name="band_passes", p=1.0)
 
     filters = Choose(
         low_pass,
         high_pass,
         band_pass,
         weights=[0.4, 0.4, 0.2],
+        name="filters",
         p=0.6,
     )
+    # augmentation = filter
     augmentation = Chain(
         # silence,
         background_noise,

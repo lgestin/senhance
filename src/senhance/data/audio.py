@@ -25,6 +25,7 @@ class Audio:
         sample_rate: int = None,
         start_s: float = 0,
         end_s: float = None,
+        loudness: float = None,
     ):
         assert isinstance(filepath, (type(None), str, Path))
         assert waveform is None or torch.is_tensor(waveform)
@@ -37,7 +38,7 @@ class Audio:
         self._sample_rate = sample_rate
         self.start_s = start_s
         self.end_s = end_s
-        self._loudness = None
+        self._loudness = loudness
 
     def to(self, device: str | torch.device):
         self.waveform.to(device, non_blocking=True)

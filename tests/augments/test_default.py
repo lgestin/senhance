@@ -10,15 +10,17 @@ from .utils import _test_augment
 @pytest.mark.parametrize("audio_file_path", AUDIO_TEST_FILES)
 def test_default(audio_file_path):
     audio = Audio(audio_file_path)
-    augment = get_default_augmentation(
+    default_augmentation = get_default_augmentation(
         noise_folder="/data/denoising/noise/",
         sample_rate=audio.sample_rate,
         split="train",
         sequence_length_s=0.5,
         p=0.5,
     )
+    for aug in default_augmentation:
+        aug.p = 1.0
 
-    _test_augment(augment=augment, audio=audio)
+    _test_augment(augment=default_augmentation, audio=audio)
 
 
 if __name__ == "__main__":

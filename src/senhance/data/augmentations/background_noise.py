@@ -16,7 +16,6 @@ from senhance.data.utils import truncated_normal
 
 @dataclass(kw_only=True)
 class BackgroundNoiseParameters(AugmentationParameters):
-    apply: torch.BoolTensor
     noise_filepath: str
     noise: torch.FloatTensor
     snr: torch.FloatTensor
@@ -31,9 +30,10 @@ class BackgroundNoise(Augmentation):
         min_snr: float,
         max_snr: float,
         min_duration_s: float = 0.0,
+        name: str = "background_noise",
         p: float = 1.0,
     ):
-        super().__init__(p=p)
+        super().__init__(name=name, p=p)
         self.data_folder = noise_source.arrow_file.parent
         self.noise_source = noise_source
 
@@ -46,36 +46,24 @@ class BackgroundNoise(Augmentation):
         noise = Audio.from_audioinfo(audioinfo)
         return noise
 
-    def sample_parameters(
+    def _sample_parameters(
         self,
         audio: Audio,
         generator: torch.Generator = None,
     ) -> BackgroundNoiseParameters:
-        apply = torch.rand(tuple(), generator=generator) <= self.p
-
-        if apply:
-            i = torch.randint(
-                0, len(self.noise_source), size=(1,), generator=generator
-            ).item()
-            noise = self.noise_source[i]
-            noise = noise.random_excerpt(
-                duration_s=audio.duration_s,
-                generator=generator,
-            )
-            noise = noise.mono().resample(audio.sample_rate)
-            noise._waveform[..., : audio.waveform.shape[-1]]
-            if noise.waveform.shape[-1] < audio.waveform.shape[-1]:
-                pad = audio.waveform.shape[-1] - noise.waveform.shape[-1]
-                noise._waveform = F.pad(noise._waveform, (0, pad))
-        else:
-            zeros = torch.zeros_like(audio.waveform)
-            noise = Audio(
-                filepath="",
-                waveform=zeros,
-                sample_rate=audio.sample_rate,
-            )
-            noise._loudness = -70.0
-
+        i = torch.randint(
+            0, len(self.noise_source), size=(1,), generator=generator
+        ).item()
+        noise = self.noise_source[i]
+        noise = noise.random_excerpt(
+            duration_s=audio.duration_s,
+            generator=generator,
+        )
+        noise = noise.mono().resample(audio.sample_rate)
+        noise._waveform[..., : audio.waveform.shape[-1]]
+        if noise.waveform.shape[-1] < audio.waveform.shape[-1]:
+            pad = audio.waveform.shape[-1] - noise.waveform.shape[-1]
+            noise._waveform = F.pad(noise._waveform, (0, pad))
         snr = truncated_normal(
             tuple(), min_val=self.min_snr, max_val=self.max_snr
         )
@@ -83,7 +71,6 @@ class BackgroundNoise(Augmentation):
         noise_loudness = torch.as_tensor(noise.loudness).to(device=noise.device)
 
         return BackgroundNoiseParameters(
-            apply=apply,
             noise_filepath=noise.filepath,
             noise=noise.waveform,
             snr=snr,
@@ -92,7 +79,7 @@ class BackgroundNoise(Augmentation):
         )
 
     @torch.inference_mode()
-    def augment(
+    def _augment(
         self,
         waveform: torch.FloatTensor,
         parameters: BackgroundNoiseParameters | BatchAugmentationParameters,
@@ -100,21 +87,21 @@ class BackgroundNoise(Augmentation):
         if isinstance(parameters, AugmentationParameters):
             parameters = parameters.collate([parameters])
 
-        if not torch.any(parameters.apply):
+        if parameters is None or (not torch.any(parameters.apply)):
             return waveform
 
         device = waveform.device
         noise = parameters.noise.to(device, non_blocking=True)
         apply = parameters.apply.to(device, non_blocking=True)
 
-        clean_loudness = parameters.clean_loudness[parameters.apply]
-        noise_loudness = parameters.noise_loudness[parameters.apply]
-        snr = parameters.snr[parameters.apply]
+        clean_loudness = parameters.clean_loudness
+        noise_loudness = parameters.noise_loudness
+        snr = parameters.snr
 
         gain = clean_loudness - noise_loudness - snr
         gain = torch.exp(math.log(10) / 20 * gain)
         gain = gain.view(-1, 1, 1)
         gain = gain.to(device, non_blocking=True)
 
-        waveform[apply] = waveform[apply] + (gain * noise[apply])
+        waveform[apply] = waveform[apply] + (gain * noise)
         return waveform

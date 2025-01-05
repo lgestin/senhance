@@ -48,7 +48,12 @@ class IndexAudioSource:
 
 
 class ArrowAudioSource:
-    def __init__(self, arrow_file: str, sequence_length_s: float = None):
+    def __init__(
+        self,
+        arrow_file: str,
+        sequence_length_s: float = None,
+        is_speech: bool = True,
+    ):
         if not isinstance(arrow_file, Path):
             arrow_file = Path(arrow_file)
         self.arrow_file = arrow_file
@@ -63,6 +68,7 @@ class ArrowAudioSource:
             durations_s = source["duration_s"].to_numpy()
             indices = indices[durations_s >= sequence_length_s]
         self.indices = indices.tolist()
+        self.is_speech = is_speech
 
     def __len__(self):
         return 10_000_000  # approx inifinite length
@@ -75,18 +81,26 @@ class ArrowAudioSource:
         waveform = item["waveform"].to_numpy()[0]
         waveform = torch.from_numpy(waveform)[None].float()
         sample_rate = int(item["sample_rate"].to_pylist()[0])
+        loudness = float(item["loudness"].to_pylist()[0])
 
         audio = Audio(
             filepath=filepath,
             waveform=waveform,
             sample_rate=sample_rate,
+            loudness=loudness,
         )
         if self.sequence_length_s:
             generator = torch.Generator().manual_seed(idx)
-            audio = audio.salient_excerpt(
-                duration_s=self.sequence_length_s,
-                generator=generator,
-            )
+            if self.is_speech:
+                audio = audio.salient_excerpt(
+                    duration_s=self.sequence_length_s,
+                    generator=generator,
+                )
+            else:
+                audio = audio.random_excerpt(
+                    duration_s=self.sequence_length_s,
+                    generator=generator,
+                )
         return audio
 
 

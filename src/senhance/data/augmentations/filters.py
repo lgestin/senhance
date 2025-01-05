@@ -14,13 +14,12 @@ from senhance.data.augmentations.chain import Chain
 
 @dataclass(kw_only=True)
 class FilterParameters(AugmentationParameters):
-    apply: torch.BoolTensor
     sample_rate: torch.FloatTensor
 
 
 class Filter(Augmentation):
-    def __init__(self, freq_hz: float, p: float = 1.0):
-        super().__init__(p=p)
+    def __init__(self, freq_hz: float, name: str, p: float = 1.0):
+        super().__init__(name=name, p=p)
         self.freq_hz = freq_hz
 
     def filter_waveform(
@@ -30,17 +29,16 @@ class Filter(Augmentation):
     ) -> torch.Tensor:
         raise NotImplementedError
 
-    def sample_parameters(
+    def _sample_parameters(
         self,
         audio: Audio,
         generator: torch.Generator = None,
     ) -> FilterParameters:
-        apply = torch.rand(tuple(), generator=generator) <= self.p
         sample_rate = audio.sample_rate
-        return FilterParameters(apply=apply, sample_rate=sample_rate)
+        return FilterParameters(sample_rate=sample_rate)
 
     @torch.inference_mode()
-    def augment(
+    def _augment(
         self,
         waveform: torch.Tensor,
         parameters: FilterParameters | BatchAugmentationParameters,
@@ -48,27 +46,26 @@ class Filter(Augmentation):
         if isinstance(parameters, AugmentationParameters):
             parameters = parameters.collate([parameters])
 
-        if not torch.any(parameters.apply):
+        if parameters is None or (not torch.any(parameters.apply)):
             return waveform
 
         device = waveform.device
-        apply = parameters.apply.to(device, non_blocking=True)
         sample_rate = parameters.sample_rate.unique().to(
             device, non_blocking=True
         )
 
-        if torch.any(apply):
-            waveform[apply] = self.filter_waveform(
-                waveform=waveform[apply],
-                sample_rate=sample_rate,
-                freq_hz=self.freq_hz,
-            )
+        apply = parameters.apply
+        waveform[apply] = self.filter_waveform(
+            waveform=waveform[apply],
+            sample_rate=sample_rate,
+            freq_hz=self.freq_hz,
+        )
         return waveform
 
 
 class LowPass(Filter):
-    def __init__(self, freq_hz: float, p: float = 1.0):
-        super().__init__(freq_hz=freq_hz, p=p)
+    def __init__(self, freq_hz: float, name: str = "low_pass", p: float = 1.0):
+        super().__init__(freq_hz=freq_hz, name=name, p=p)
 
     def filter_waveform(
         self,
@@ -85,8 +82,13 @@ class LowPass(Filter):
 
 
 class HighPass(Filter):
-    def __init__(self, freq_hz: float, p: float = 1.0):
-        super().__init__(freq_hz=freq_hz, p=p)
+    def __init__(
+        self,
+        freq_hz: float,
+        name: str = "high_pass",
+        p: float = 1.0,
+    ):
+        super().__init__(freq_hz=freq_hz, name=name, p=p)
 
     def filter_waveform(
         self,
@@ -103,8 +105,13 @@ class HighPass(Filter):
 
 
 class BandPass(Filter):
-    def __init__(self, bands_hz: tuple[float], p: float = 1.0):
-        super().__init__(freq_hz=bands_hz, p=p)
+    def __init__(
+        self,
+        bands_hz: tuple[float],
+        name: str = "band_pass",
+        p: float = 1.0,
+    ):
+        super().__init__(freq_hz=bands_hz, name=name, p=p)
         self.bands_hz = bands_hz
 
     def filter_waveform(
@@ -123,7 +130,12 @@ class BandPass(Filter):
 
 
 class BandPassChain(Chain):
-    def __init__(self, band_hz: tuple[float], p: float = 1.0):
+    def __init__(
+        self,
+        band_hz: tuple[float],
+        name: str = "band_pass",
+        p: float = 1.0,
+    ):
         low_pass = LowPass(band_hz[0], p=1.0)
         high_pass = HighPass(band_hz[1], p=1.0)
-        super().__init__(low_pass, high_pass, p=p)
+        super().__init__(low_pass, high_pass, name=name, p=p)

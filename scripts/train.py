@@ -166,13 +166,16 @@ def train(exp_path: str, config: TrainingConfig):
         batch = batch.to(device)
 
         clean = batch.waveforms
-        augmentation_params = batch.augmentation_params.to(device)
+        augmentation_params = batch.augmentation_params
+        if augmentation_params:
+            augmentation_params = augmentation_params.to(device)
         noisy = clean.clone()
         noisy = train_augments.augment(noisy, parameters=augmentation_params)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             with torch.no_grad():
-                x_clean = codec.normalize(codec.encode(clean))
-                x_noisy = codec.normalize(codec.encode(noisy))
+                x_clean, x_noisy = codec.normalize(
+                    codec.encode(torch.cat([clean, noisy]))
+                ).chunk(2, dim=0)
 
         timestep = torch.rand((clean.shape[0],), device=device)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
@@ -203,7 +206,10 @@ def train(exp_path: str, config: TrainingConfig):
     def sample(batch):
         batch = batch.to(device)
         clean = batch.waveforms
-        augmentation_params = batch.augmentation_params.to(device)
+        noisy = clean.clone()
+        augmentation_params = batch.augmentation_params
+        if augmentation_params:
+            augmentation_params = augmentation_params.to(device)
         noisy = test_augments.augment(
             waveform=clean.clone(),
             parameters=augmentation_params,
@@ -235,7 +241,7 @@ def train(exp_path: str, config: TrainingConfig):
         log_waveform(clean, f"{i}/clean", 0)
         log_waveform(reconstructed, f"{i}/reconstructed", 0)
 
-    pbar = tqdm(total=config.max_steps)
+    pbar = tqdm(total=config.max_steps, unit="batch", smoothing=0.1)
     step, best_loss = 0, torch.inf
     while step < config.max_steps:
         for batch in train_dloader:

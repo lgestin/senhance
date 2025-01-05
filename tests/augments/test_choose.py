@@ -14,7 +14,6 @@ def test_choose(audio_file_path):
     audio = Audio(audio_file_path)
     augment = Choose(
         GaussianNoise(min_amplitude=10, max_amplitude=10),
-        # GaussianNoise(min_amplitude=100, max_amplitude=100),
         Chain(
             GaussianNoise(min_amplitude=10, max_amplitude=10),
             GaussianNoise(min_amplitude=100, max_amplitude=100),
@@ -27,4 +26,4 @@ def test_choose(audio_file_path):
 
 
 if __name__ == "__main__":
-    test_choose()
+    test_choose(AUDIO_TEST_FILES[0])

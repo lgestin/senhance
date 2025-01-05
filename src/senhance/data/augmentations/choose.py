@@ -14,29 +14,29 @@ from senhance.data.augmentations.augmentations import (
 
 @dataclass(kw_only=True)
 class ChooseParameters(AugmentationParameters):
-    apply: torch.BoolTensor
     choice: torch.LongTensor
     params: dict[int, AugmentationParameters]
 
     def collate(
         self, parameters: list["ChooseParameters"]
-    ) -> dict[AugmentationParameters, BatchAugmentationParameters]:
+    ) -> "BatchChooseParameters":
         return BatchChooseParameters(parameters)
 
 
 class BatchChooseParameters(BatchAugmentationParameters):
     def collate_fields(self):
-        parameters = self._parameters
+        parameters: list[ChooseParameters] = self._parameters
 
-        apply = torch.empty((len(parameters),), dtype=torch.bool)
-        choices = torch.empty((len(parameters),), dtype=torch.long)
+        apply = [param is not None for param in parameters]
+        apply = torch.as_tensor(apply)
+
+        parameters = [param for param in parameters if param]
+        choices = [param.choice for param in parameters]
+        choices = torch.as_tensor(choices, dtype=torch.long)
         choices_params = defaultdict(list)
         for i, params in enumerate(parameters):
-            apply[i] = params.apply
-            choices[i] = params.choice
             choice = params.choice.item()
             choices_params[choice].append(params.params)
-
         choices_params = {
             choice: params[0].collate(params)
             for choice, params in choices_params.items()
@@ -51,9 +51,10 @@ class Choose(Augmentation):
         self,
         *augmentations: Augmentation,
         weights: list[float] | torch.FloatTensor = None,
+        name: str = "choose",
         p: float = 1.0,
     ):
-        super().__init__(p=p)
+        super().__init__(name=name, p=p)
         n = len(augmentations)
         if weights is None:
             weights = torch.full((n,), 1 / n)
@@ -75,12 +76,11 @@ class Choose(Augmentation):
     def __len__(self):
         return len(self.augmentations)
 
-    def sample_parameters(
+    def _sample_parameters(
         self,
         audio: Audio,
         generator: torch.Generator = None,
     ) -> ChooseParameters:
-        apply = torch.rand(tuple(), generator=generator) <= self.p
         choice = torch.searchsorted(
             self.weights, torch.rand(tuple(), generator=generator)
         )
@@ -88,16 +88,9 @@ class Choose(Augmentation):
         chosen_params = chosen.sample_parameters(
             audio=audio, generator=generator
         )
-        apply &= chosen_params.apply
-        chosen_params.apply &= apply
-        params = ChooseParameters(
-            apply=apply,
-            choice=choice,
-            params=chosen_params,
-        )
-        return params
+        return ChooseParameters(choice=choice, params=chosen_params)
 
-    def augment(
+    def _augment(
         self,
         waveform: torch.Tensor,
         parameters: ChooseParameters | BatchChooseParameters,
@@ -105,13 +98,15 @@ class Choose(Augmentation):
         if isinstance(parameters, AugmentationParameters):
             parameters = BatchChooseParameters([parameters])
 
-        if not torch.any(parameters.apply):
+        if parameters is None or (not torch.any(parameters.apply)):
             return waveform
 
         parameters.choice.to(waveform.device, non_blocking=True)
+        augmented = waveform[parameters.apply]
         for choice, params in parameters.params.items():
             apply = parameters.choice == choice
-            waveform[apply] = self.augmentations[choice].augment(
-                waveform[apply], parameters=params
+            augmented[apply] = self.augmentations[choice].augment(
+                augmented[apply], parameters=params
             )
+        waveform[parameters.apply] = augmented
         return waveform

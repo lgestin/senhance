@@ -17,7 +17,7 @@ def test_chain(audio_file_path):
             GaussianNoise(min_amplitude=10, max_amplitude=10),
             GaussianNoise(min_amplitude=100, max_amplitude=100),
         ),
-        GaussianNoise(min_amplitude=100, max_amplitude=100),
+        GaussianNoise(min_amplitude=1, max_amplitude=1),
         p=0.5,
     )
 

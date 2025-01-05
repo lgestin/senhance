@@ -8,13 +8,8 @@ from senhance.data.audio import Audio
 
 @dataclass
 class AugmentationParameters:
-    apply: torch.BoolTensor = field(
-        default_factory=lambda: torch.as_tensor(True)
-    )
-
-    @classmethod
     def collate(
-        cls, parameters: list["AugmentationParameters"]
+        self, parameters: list["AugmentationParameters"]
     ) -> "BatchAugmentationParameters":
         return BatchAugmentationParameters(parameters)
 
@@ -31,15 +26,23 @@ class BatchAugmentationParameters:
         self.collate_fields()
 
     def _validate_parameters(self):
+        params_type = type(
+            next(filter(lambda p: p is not None, self._parameters))
+        )
         are_all_params_same = all(
-            isinstance(param, type(self._parameters[0]))
+            isinstance(param, (params_type, type(None)))
             for param in self._parameters
         )
         assert are_all_params_same, "All parameters must be of the same type"
 
     def collate_fields(self):
+        apply = [param is not None for param in self._parameters]
+        apply = torch.as_tensor(apply)
+        setattr(self, "apply", apply)
+
+        parameters = [param for param in self._parameters if param]
         for field in self.fields:
-            values = [getattr(param, field.name) for param in self._parameters]
+            values = [getattr(param, field.name) for param in parameters]
             batch = self._collate_values(values)
             setattr(self, field.name, batch)
 
@@ -59,7 +62,8 @@ class BatchAugmentationParameters:
 
     @property
     def fields(self):
-        return fields(self._parameters[0])
+        param = next(filter(lambda p: p is not None, self._parameters))
+        return fields(param)
 
     def __getitem__(self, idx: int | torch.BoolTensor):
         if isinstance(idx, int):
@@ -75,7 +79,13 @@ class BatchAugmentationParameters:
         return item
 
     def to(self, device: str | torch.device, non_blocking: bool = False):
-        for field in fields(self._parameters[0]):
+        parameters = next(
+            filter(lambda p: p is not None, self._parameters), None
+        )
+        if parameters is None:
+            return self
+
+        for field in fields(parameters):
             value = getattr(self, field.name)
             if torch.is_tensor(value):
                 value.to(device, non_blocking=non_blocking)
@@ -95,15 +105,6 @@ class BatchAugmentationParameters:
     def size(self):
         return len(self._parameters)
 
-    @classmethod
-    def collate(cls, parameters: list[AugmentationParameters]):
-        assert all(
-            isinstance(param, parameters[0].__class__) for param in parameters
-        )
-        # parameters = cls(parameters)
-        parameters = parameters[0].collate(parameters)
-        return parameters
-
 
 class Augmentation:
     def __init__(self, name: str = None, p: float = 1.0):
@@ -119,6 +120,16 @@ class Augmentation:
         self,
         audio: Audio,
         generator: torch.Generator = None,
+    ) -> AugmentationParameters | None:
+        params = None
+        if apply := (torch.rand(tuple(), generator=generator) <= self.p):
+            params = self._sample_parameters(audio=audio, generator=generator)
+        return params
+
+    def _sample_parameters(
+        self,
+        audio: Audio,
+        generator: torch.Generator = None,
     ) -> AugmentationParameters:
         """
         anything not related to torch.Tensor
@@ -127,6 +138,13 @@ class Augmentation:
         raise NotImplementedError
 
     def augment(
+        self,
+        waveform: torch.Tensor,
+        parameters: BatchAugmentationParameters,
+    ) -> torch.Tensor:
+        return self._augment(waveform=waveform, parameters=parameters)
+
+    def _augment(
         self,
         waveform: torch.Tensor,
         parameters: BatchAugmentationParameters,

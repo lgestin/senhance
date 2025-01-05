@@ -54,7 +54,7 @@ class GaussianNoise(Augmentation):
             return waveform
 
         apply = parameters.apply
-        waveform[apply] = (
-            parameters.amplitude[apply].view(-1, 1, 1) * waveform[apply]
-        )
+        amplitude = parameters.amplitude[apply].view(-1, 1, 1)
+        noise = torch.randn_like(waveform[apply])
+        waveform[apply] = amplitude * noise + waveform[apply]
         return waveform
