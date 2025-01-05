@@ -1,8 +1,9 @@
-import torch
-from dataclasses import dataclass, asdict
-
 from concurrent.futures import ThreadPoolExecutor
-from senhance.models.unet.unet import UNET1dDims
+from dataclasses import asdict, dataclass
+
+import torch
+
+from senhance.models.unet.simple_unet import UNET1dDims
 
 
 @dataclass
@@ -13,6 +14,7 @@ class Checkpoint:
     dims: UNET1dDims
     model: dict[str, torch.Tensor]
     opt: dict[str, torch.Tensor]
+    scaler: dict[str, torch.Tensor]
 
     def __post_init__(self):
         self.executor = ThreadPoolExecutor(1)
@@ -26,6 +28,10 @@ class Checkpoint:
 
     @classmethod
     def load(cls, path: str, map_location: str | torch.device = "cpu"):
-        checkpoint = torch.load(path, map_location=map_location, weights_only=True)
+        checkpoint = torch.load(
+            path,
+            map_location=map_location,
+            weights_only=True,
+        )
         checkpoint = cls(**checkpoint)
         return checkpoint

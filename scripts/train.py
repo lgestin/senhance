@@ -27,6 +27,8 @@ class TrainingConfig:
     noise_folder: str
     codec_path: str
 
+    checkpoint_path: str = None
+
     sigma_0: float = 1.0
     sigma_1: float = 1e-7
 
@@ -165,6 +167,14 @@ def train(exp_path: str, config: TrainingConfig):
     )
     scaler = torch.GradScaler()
 
+    step, best_loss = 0, torch.inf
+    if config.checkpoint_path:
+        checkpoint = Checkpoint.load(config.checkpoint_path)
+        step, best_loss = checkpoint.step, checkpoint.best_loss
+        cflow_matcher.load_state_dict(checkpoint.model)
+        opt.load_state_dict(checkpoint.opt)
+        scaler.load_state_dict(checkpoint.scaler)
+
     def process_batch(batch):
         batch = batch.to(device)
 
@@ -245,7 +255,6 @@ def train(exp_path: str, config: TrainingConfig):
         log_waveform(reconstructed, f"{i}/reconstructed", 0)
 
     pbar = tqdm(total=config.max_steps, unit="batch", smoothing=0.1)
-    step, best_loss = 0, torch.inf
     while step < config.max_steps:
         for batch in train_dloader:
             if step % config.smp_steps == 0:
@@ -289,6 +298,7 @@ def train(exp_path: str, config: TrainingConfig):
                     dims=cflow_matcher.module.dims,
                     model=cflow_matcher.state_dict(),
                     opt=opt.state_dict(),
+                    scaler=scaler.state_dict(),
                 )
                 checkpoint.save(Path(exp_path) / f"checkpoint.{step}.pt")
                 if (loss := val_metrics["loss"]) < best_loss:

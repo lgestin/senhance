@@ -52,6 +52,7 @@ extra-dependencies = [
   "isort",
   "ipdb",
   "ipykernel",
+  "jupyterlab",
   "matplotlib",
   "seaborn",
 ]
