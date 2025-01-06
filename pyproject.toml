@@ -13,7 +13,6 @@ keywords = []
 authors = [
   { name = "lgestin", email = "lucas.gestin.pro@gmail.com" },
 ]
-installer = "uv"
 dependencies = [
   "av",
   "pyarrow",
@@ -44,6 +43,7 @@ packages = ["src/senhance"]
 
 
 [tool.hatch.envs.default]
+installer = "uv"
 extra-dependencies = [
   "tensorboard",
   "pytest",
