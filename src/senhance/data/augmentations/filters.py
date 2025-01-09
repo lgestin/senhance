@@ -81,6 +81,36 @@ class LowPass(Filter):
         return waveform
 
 
+class LowPassResample(Filter):
+    def __init__(
+        self,
+        freq_hz: float,
+        name: str = "low_pass_resample",
+        p: float = 1.0,
+    ):
+        super().__init__(freq_hz=freq_hz, name=name, p=p)
+
+    @torch.inference_mode()
+    def filter_waveform(
+        self,
+        waveform: torch.Tensor,
+        sample_rate: int,
+        freq_hz: float,
+    ) -> torch.Tensor:
+        s = waveform.shape[-1]
+        waveform = F.resample(
+            waveform=waveform,
+            orig_freq=sample_rate,
+            new_freq=self.freq_hz,
+        )
+        waveform = F.resample(
+            waveform=waveform,
+            orig_freq=self.freq_hz,
+            new_freq=sample_rate,
+        )
+        return waveform[..., :s]
+
+
 class HighPass(Filter):
     def __init__(
         self,

@@ -189,6 +189,8 @@ def train(exp_path: str, config: TrainingConfig):
                 x_clean, x_noisy = codec.normalize(
                     codec.encode(torch.cat([clean, noisy]))
                 ).chunk(2, dim=0)
+                x_clean = 0.5 * x_clean
+                x_noisy = 0.5 * x_noisy
 
         timestep = torch.rand((clean.shape[0],), device=device)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
@@ -197,7 +199,7 @@ def train(exp_path: str, config: TrainingConfig):
                 x_1=x_clean,
                 timestep=timestep,
             )
-            loss = torch.nn.functional.mse_loss(vt, ut)
+            loss = (vt - ut).pow(2).mean()
 
         if cflow_matcher.training:
             opt.zero_grad()
@@ -228,12 +230,12 @@ def train(exp_path: str, config: TrainingConfig):
             parameters=augmentation_params,
         )
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
-            x_noisy = codec.normalize(codec.encode(noisy))
+            x_noisy = 0.5 * codec.normalize(codec.encode(noisy))
 
         timesteps = torch.linspace(0, 1, config.n_cfm_steps).tolist()
         x_cleaned = cflow_matcher.sample(x_0=x_noisy, timesteps=timesteps)
         with torch.no_grad():
-            cleaned = codec.decode(codec.unnormalize(x_cleaned))
+            cleaned = codec.decode(codec.unnormalize(2 * x_cleaned))
         return noisy, cleaned
 
     @torch.inference_mode()
