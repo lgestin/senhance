@@ -6,8 +6,12 @@ from torch.nn.utils.parametrizations import weight_norm
 
 from senhance.models.unet.magnitude_preserving import timestep_embedding
 from senhance.models.unet.unet import (
-    TimestepAwareModule,
+    Block,
+    Downsample,
+    SiLU,
     TimestepAwareSequential,
+    Upsample,
+    mp_sum,
 )
 
 
@@ -15,42 +19,6 @@ class WNConv1d(nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         weight_norm(self)
-
-
-class Block(TimestepAwareModule):
-    def __init__(self, dim: int):
-        super().__init__()
-        self.emb = WNConv1d(4 * dim, dim, 1)
-        self.conv1 = nn.Sequential(
-            nn.SiLU(),
-            WNConv1d(dim, dim, 3, dilation=3, padding=3),
-            nn.SiLU(),
-            WNConv1d(dim, dim, 3, padding=1),
-        )
-        self.conv2 = nn.Sequential(
-            nn.SiLU(),
-            WNConv1d(dim, dim, 3, padding=1),
-        )
-
-    def forward(self, x: torch.Tensor, emb: torch.Tensor):
-        emb = self.emb(emb)
-
-        x_skip = x
-        x = self.conv1(x)
-        x = x * (emb + 1)
-        x = self.conv2(x)
-        return x + x_skip
-
-
-class Downsample(nn.Module):
-    def __init__(self, dim: int, rate: int):
-        super().__init__()
-        self.down = WNConv1d(
-            dim, dim, kernel_size=2 * rate, stride=rate, padding=1
-        )
-
-    def forward(self, x: torch.Tensor):
-        return self.down(x)
 
 
 class EncoderBlock(Block):
@@ -64,15 +32,6 @@ class EncoderBlock(Block):
         if self.downsample:
             x = self.downsample(x)
         return super().forward(x, emb)
-
-
-class Upsample(nn.Module):
-    def __init__(self, dim: int, rate: int):
-        super().__init__()
-        self.up = nn.ConvTranspose1d(dim, dim, 2 * rate, stride=rate, padding=1)
-
-    def forward(self, x: torch.Tensor):
-        return self.up(x)
 
 
 class DecoderBlock(Block):
@@ -102,8 +61,7 @@ class UNET1d(nn.Module):
         in_dim, dim = dims.in_dim, dims.dim
         emb_dim = 4 * dim
 
-        self.t_emb = nn.Sequential(WNConv1d(dims.t_dim, emb_dim, 1), nn.SiLU())
-
+        self.t_emb = nn.Sequential(WNConv1d(dims.t_dim, emb_dim, 1), SiLU())
         encoder = nn.ModuleList(
             [
                 TimestepAwareSequential(WNConv1d(in_dim, dim, 3, padding=1)),
@@ -151,15 +109,14 @@ class UNET1d(nn.Module):
                 DecoderBlock(dim),
                 DecoderBlock(dim),
                 DecoderBlock(dim),
-                TimestepAwareSequential(
-                    DecoderBlock(dim),
-                    WNConv1d(dim, in_dim, 3, padding=1),
-                ),
+                DecoderBlock(dim),
             ],
         )
         self.encoder = encoder
         self.bridger = bridger
         self.decoder = decoder
+        self.out_conv = WNConv1d(dim, in_dim, 3, padding=1)
+        self.out_gain = nn.Parameter(torch.zeros([]))
 
     def forward(self, x_t: torch.FloatTensor, timestep):
         t_emb = timestep_embedding(timestep, self.dims.t_dim)
@@ -176,8 +133,9 @@ class UNET1d(nn.Module):
         x = self.bridger(x, emb)
 
         for layer, skip in zip(self.decoder, reversed(skips), strict=True):
-            x = x + skip
+            x = mp_sum(x, skip)
             x = layer(x, emb)
 
-        x = x + x_skip
+        x = self.out_conv(x)
+        x = mp_sum(x, x_skip)
         return x

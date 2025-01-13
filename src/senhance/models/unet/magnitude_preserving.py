@@ -1,15 +1,17 @@
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from torch.nn.utils.parametrizations import weight_norm
 
 
 def normalize(x, dim: int = None, eps: float = 1e-8):
     if dim is None:
         dim = list(range(1, x.ndim))
-    norm = torch.linalg.vector_norm(x, dim=dim, keepdim=True, dtype=torch.float32)
+    norm = torch.linalg.vector_norm(
+        x, dim=dim, keepdim=True, dtype=torch.float32
+    )
     norm = torch.add(eps, norm, alpha=math.sqrt(norm.numel() / x.numel()))
     return x / norm.to(x.dtype)
 
@@ -38,13 +40,17 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     half = dim // 2
     freqs = torch.exp(
         -math.log(max_period)
-        * torch.arange(start=0, end=half, dtype=torch.float32, device=timesteps.device)
+        * torch.arange(
+            start=0, end=half, dtype=torch.float32, device=timesteps.device
+        )
         / half
     )
     args = timesteps[:, None].float() * freqs[None]
     embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
     if dim % 2:
-        embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
+        embedding = torch.cat(
+            [embedding, torch.zeros_like(embedding[:, :1])], dim=-1
+        )
     return math.sqrt(2) * embedding
 
 
@@ -72,21 +78,62 @@ class MPConv1d(nn.Module):
     ):
         super().__init__()
         self.out_channels = out_channels
-        self.weight = nn.Parameter(torch.randn(out_channels, in_channels, kernel_size))
+        self.weight = nn.Parameter(
+            torch.randn(out_channels, in_channels, kernel_size)
+        )
         self.dilation = dilation
         self.stride = stride
         self.groups = groups
         self.padding = padding
 
-    def forward(self, x):
+    def forward(self, x, gain: float = 1):
         w = self.weight.to(torch.float32)
         if self.training:
             with torch.no_grad():
                 self.weight.copy_(normalize(w))  # forced weight normalization
         w = normalize(w)  # traditional weight normalization
-        w = w / math.sqrt(w[0].numel())  # magnitude-preserving scaling
+        w = w * (gain / math.sqrt(w[0].numel()))  # magnitude-preserving scaling
         w = w.to(x.dtype)
         return F.conv1d(
+            x,
+            w,
+            dilation=self.dilation,
+            stride=self.stride,
+            groups=self.groups,
+            padding=self.padding,
+        )
+
+
+class MPConvTranspose1d(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        dilation: int = 1,
+        stride: int = 1,
+        groups: int = 1,
+        padding: int = 0,
+    ):
+        super().__init__()
+        self.out_channels = out_channels
+        self.weight = nn.Parameter(
+            torch.randn(in_channels, out_channels, kernel_size)
+        )
+        self.dilation = dilation
+        self.stride = stride
+        self.groups = groups
+        self.padding = padding
+
+    def forward(self, x, gain: float = 1):
+        w = self.weight.to(torch.float32)
+        if self.training:
+            with torch.no_grad():
+                self.weight.copy_(normalize(w))  # forced weight normalization
+        w = normalize(w)  # traditional weight normalization
+        w = w * (gain / math.sqrt(w[1].numel()))  # magnitude-preserving scaling
+        w = w.to(x.dtype)
+        return F.conv_transpose1d(
             x,
             w,
             dilation=self.dilation,

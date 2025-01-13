@@ -16,7 +16,8 @@ class ConditionalFlowMatcher(nn.Module):
         timestep = timestep.view(-1, 1, 1)
         x_t = (1 - timestep) * x_0 + timestep * x_1
         v_t = self.module(x_t=x_t, timestep=timestep[:, 0, 0])
-        u_t = (x_1 - x_t) / (1 - timestep + 1e-8)
+        # u_t = (x_1 - x_t) / (1 - timestep + 1e-8)
+        u_t = x_1 - x_0
         return v_t, u_t
 
     @torch.inference_mode()

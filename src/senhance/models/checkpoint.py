@@ -3,7 +3,7 @@ from dataclasses import asdict, dataclass
 
 import torch
 
-from senhance.models.unet.simple_unet import UNET1dDims
+from senhance.models.unet.unet import UNET1dDims
 
 
 @dataclass
