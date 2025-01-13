@@ -29,7 +29,7 @@ def create_arrow_from_index(
     schema = pa.schema(
         [
             pa.field("filepath", type=pa.string()),
-            pa.field("waveform", type=pa.list_(pa.float16())),
+            pa.field("waveform", type=pa.list_(pa.int16())),
             pa.field("sample_rate", type=pa.float64()),
             pa.field("duration_s", type=pa.float64()),
             pa.field("loudness", type=pa.float64()),
@@ -53,7 +53,7 @@ def create_arrow_from_index(
                     for filepath, job in jobs.items():
                         waveforms["filepath"].append(filepath)
                         waveform = job.result()[0]
-                        waveform = waveform.mean(0).numpy()
+                        waveform = waveform.mean(0, dtype=waveform.dtype)
                         waveforms["waveform"].append(waveform)
                         for key, val in table.loc[filepath].to_dict().items():
                             waveforms[key].append(val)

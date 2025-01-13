@@ -79,7 +79,7 @@ class ArrowAudioSource:
         filepath = item["filepath"].to_pylist()[0]
         filepath = (self.arrow_file.parent / filepath).as_posix()
         waveform = item["waveform"].to_numpy()[0]
-        waveform = torch.from_numpy(waveform)[None].float()
+        waveform = torch.from_numpy(waveform)[None].float() / 32768.0
         sample_rate = int(item["sample_rate"].to_pylist()[0])
         loudness = float(item["loudness"].to_pylist()[0])
 
