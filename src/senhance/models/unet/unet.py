@@ -3,14 +3,13 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.utils.parametrizations import weight_norm
 
-from senhance.models.unet.attention import SelfAttention
 from senhance.models.unet.magnitude_preserving import (
     MPConv1d,
     MPConvTranspose1d,
     PixelNorm,
+    SelfAttention,
     SiLU,
     mp_sum,
     timestep_embedding,
@@ -39,7 +38,7 @@ class TimestepAwareSequential(nn.Sequential, TimestepAwareModule):
 
 
 class Block(TimestepAwareModule):
-    def __init__(self, dim: int):
+    def __init__(self, dim: int, attn: bool = False):
         super().__init__()
         self.pixnorm = PixelNorm()
         self.emb = MPConv1d(4 * dim, dim, 1)
@@ -54,6 +53,9 @@ class Block(TimestepAwareModule):
             SiLU(),
             MPConv1d(dim, dim, 3, padding=1),
         )
+        if attn:
+            attn = SelfAttention(dim)
+        self.attn = attn
 
     def forward(self, x: torch.Tensor, emb: torch.Tensor):
         emb = self.emb(emb, gain=self.emb_gain)
@@ -63,7 +65,10 @@ class Block(TimestepAwareModule):
         x = self.conv1(x)
         x = x * (emb + 1)
         x = self.conv2(x)
-        return mp_sum(x, x_skip, t=0.3)
+        x = mp_sum(x, x_skip, t=0.3)
+        if self.attn:
+            x = mp_sum(x, self.attn(x), t=0.3)
+        return x
 
 
 class Downsample(nn.Module):
@@ -78,8 +83,8 @@ class Downsample(nn.Module):
 
 
 class EncoderBlock(Block):
-    def __init__(self, dim: int, downsample: int = None):
-        super().__init__(dim=dim)
+    def __init__(self, dim: int, attn: bool = False, downsample: int = None):
+        super().__init__(dim=dim, attn=attn)
         if downsample:
             downsample = Downsample(dim, rate=downsample)
         self.downsample = downsample
@@ -100,8 +105,8 @@ class Upsample(nn.Module):
 
 
 class DecoderBlock(Block):
-    def __init__(self, dim: int, upsample: int = None):
-        super().__init__(dim=dim)
+    def __init__(self, dim: int, attn: bool = False, upsample: int = None):
+        super().__init__(dim=dim, attn=attn)
         if upsample:
             upsample = Upsample(dim, rate=upsample)
         self.upsample = upsample
@@ -143,30 +148,30 @@ class UNET1d(nn.Module):
                 EncoderBlock(dim),
                 EncoderBlock(dim),
                 EncoderBlock(dim, downsample=2),
-                EncoderBlock(dim),
-                EncoderBlock(dim),
-                EncoderBlock(dim),
+                EncoderBlock(dim, attn=True),
+                EncoderBlock(dim, attn=True),
+                EncoderBlock(dim, attn=True),
                 EncoderBlock(dim, downsample=2),
-                EncoderBlock(dim),
-                EncoderBlock(dim),
-                EncoderBlock(dim),
+                EncoderBlock(dim, attn=True),
+                EncoderBlock(dim, attn=True),
+                EncoderBlock(dim, attn=True),
             ],
         )
-        bridger = TimestepAwareSequential(Block(dim), Block(dim))
+        bridger = TimestepAwareSequential(Block(dim, attn=True), Block(dim))
         decoder = nn.ModuleList(
             [
-                DecoderBlock(dim),
-                DecoderBlock(dim),
-                DecoderBlock(dim),
+                DecoderBlock(dim, attn=True),
+                DecoderBlock(dim, attn=True),
+                DecoderBlock(dim, attn=True),
                 TimestepAwareSequential(
-                    DecoderBlock(dim),
+                    DecoderBlock(dim, attn=True),
                     DecoderBlock(dim, upsample=2),
                 ),
-                DecoderBlock(dim),
-                DecoderBlock(dim),
-                DecoderBlock(dim),
+                DecoderBlock(dim, attn=True),
+                DecoderBlock(dim, attn=True),
+                DecoderBlock(dim, attn=True),
                 TimestepAwareSequential(
-                    DecoderBlock(dim),
+                    DecoderBlock(dim, attn=True),
                     DecoderBlock(dim, upsample=2),
                 ),
                 DecoderBlock(dim),

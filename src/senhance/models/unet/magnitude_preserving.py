@@ -2,7 +2,9 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.attention.flex_attention
 import torch.nn.functional as F
+from einops import rearrange
 from torch.nn.utils.parametrizations import weight_norm
 
 
@@ -146,3 +148,20 @@ class MPConvTranspose1d(nn.Module):
 class PixelNorm(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return normalize(x, dim=1)
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, dim: int, num_heads: int = 8):
+        super().__init__()
+        self.num_heads = num_heads
+        self.qkv = MPConv1d(dim, 3 * dim, 1)
+        self.proj = MPConv1d(dim, dim, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        qkv = self.qkv(x)
+        qkv = rearrange(qkv, "B (K H D) L -> K B H L D", K=3, H=self.num_heads)
+        q, k, v = normalize(qkv, dim=-1)
+        x = torch.nn.attention.flex_attention.flex_attention(q, k, v)
+        x = rearrange(x, "B H L D -> B (H D) L")
+        x = self.proj(x)
+        return x
