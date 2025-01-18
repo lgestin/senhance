@@ -163,6 +163,7 @@ def train(exp_path: str, config: TrainingConfig):
         cflow_matcher.parameters(),
         lr=config.lr,
         betas=(0.9, 0.99),
+        fused=True,
     )
     scaler = torch.GradScaler()
 
