@@ -10,6 +10,7 @@ def split_data_index(
     n_test: int | float,
     min_duration_s: float = 0.0,
 ):
+    random.seed(0)
     with open(data_index_path, "r") as f:
         index = json.load(f)
     index = [idx for idx in index if idx["duration_s"] >= min_duration_s]
@@ -19,12 +20,11 @@ def split_data_index(
     splits = {"train": n_train, "valid": n_valid, "test": n_test}
 
     # convert ratio to n
-    if all(isinstance(n, float) for n in splits):
+    if all(isinstance(n, float) for n in splits.values()):
         assert sum(splits.values()) == 1.0
         for key, ratio in splits.copy().items():
             splits[key] = int(ratio * n_total)
-        while sum(splits.values()) < n_total:
-            splits[list(splits.keys)[0]] += 1
+        splits["train"] += n_total - sum(splits.values())
 
     assert sum(splits.values()) == n_total
     splits_index = {}
@@ -47,9 +47,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_index_path", type=str, required=True)
-    parser.add_argument("--n_train", type=int, required=True)
-    parser.add_argument("--n_valid", type=int, required=True)
-    parser.add_argument("--n_test", type=int, required=True)
+    parser.add_argument("--n_train", type=float, required=True)
+    parser.add_argument("--n_valid", type=float, required=True)
+    parser.add_argument("--n_test", type=float, required=True)
     parser.add_argument("--min_duration_s", type=float, default=0.0)
 
     options = parser.parse_args()

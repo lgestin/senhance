@@ -1,6 +1,3 @@
-import re
-import shlex
-import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -79,14 +76,14 @@ def train(exp_path: str, config: TrainingConfig):
         sample_rate=config.sample_rate,
         sequence_length_s=sequence_length_s,
         split="train",
-        p=0.95,
+        p=0.98,
     )
     valid_augments = get_default_augmentation(
         noise_folder="/data/denoising/noise/",
         sample_rate=config.sample_rate,
         sequence_length_s=sequence_length_s,
         split="valid",
-        p=0.95,
+        p=0.98,
     )
     test_augments = get_default_augmentation(
         noise_folder="/data/denoising/noise/",
@@ -113,6 +110,7 @@ def train(exp_path: str, config: TrainingConfig):
         batch_size=config.batch_size,
         collate_fn=collate,
         num_workers=config.n_workers,
+        pin_memory=True,
         shuffle=True,
     )
 
@@ -131,6 +129,7 @@ def train(exp_path: str, config: TrainingConfig):
         batch_size=config.batch_size,
         collate_fn=collate,
         num_workers=config.n_workers,
+        pin_memory=True,
     )
 
     test_audio_source = ArrowAudioSource(
@@ -198,7 +197,7 @@ def train(exp_path: str, config: TrainingConfig):
                 x_1=x_clean,
                 timestep=timestep,
             )
-            loss = (vt - ut).pow(2).mean()
+            loss = torch.nn.functional.mse_loss(ut, vt)
 
         if cflow_matcher.training:
             opt.zero_grad()
@@ -310,12 +309,6 @@ def train(exp_path: str, config: TrainingConfig):
             metrics = process_batch(batch)
 
             pbar.set_description_str(f"TRAIN {step} | {metrics['loss']:.4f}")
-            shm_size = shlex.split("df -h /dev/shm")
-            shm_size = subprocess.run(
-                shm_size, stdout=subprocess.PIPE
-            ).stdout.decode("utf-8")
-            shm_size = float(re.findall(r"\s(\d)%\s", shm_size)[0])
-            writer.add_scalar("train/shm_size", shm_size, global_step=step)
             for key, val in metrics.items():
                 writer.add_scalar(f"train/{key}", val, global_step=step)
             pbar.update(1)

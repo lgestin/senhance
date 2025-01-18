@@ -36,6 +36,10 @@ class Batch:
                 setattr(self, field.name, value)
         return self
 
+    def pin_memory(self):
+        self.waveforms = self.waveforms.pin_memory()
+        return self
+
 
 class AudioDataset(Dataset):
     def __init__(
