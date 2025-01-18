@@ -7,7 +7,7 @@ import pandas as pd
 import pyarrow as pa
 from tqdm import tqdm
 
-from senhance.data.utils import load_audio
+from senhance.data.utils import load_waveform
 
 
 def create_arrow_from_index(
@@ -47,7 +47,7 @@ def create_arrow_from_index(
                 with ThreadPoolExecutor(n_workers) as executor:
                     for filepath in table.index:
                         jobs[filepath] = executor.submit(
-                            load_audio, output_folder / filepath
+                            load_waveform, output_folder / filepath
                         )
 
                     for filepath, job in jobs.items():

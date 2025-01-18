@@ -6,7 +6,7 @@ import soundfile as sf
 import torch
 import torchaudio.functional as F
 
-from senhance.data.utils import load_audio, resample
+from senhance.data.utils import load_waveform, resample
 
 
 @dataclass
@@ -60,7 +60,7 @@ class Audio:
             end = -1
             if self.end_s:
                 end = int(self.end_s * sample_rate)
-            waveform, sr = load_audio(
+            waveform, sr = load_waveform(
                 path=self.filepath,
                 sample_rate=sample_rate,
                 start=start,

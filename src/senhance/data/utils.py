@@ -5,7 +5,7 @@ from av.audio.frame import AudioFrame
 from av.audio.resampler import AudioResampler
 
 
-def load_audio(
+def load_waveform(
     path: str,
     sample_rate: int = None,
     start: int = 0,

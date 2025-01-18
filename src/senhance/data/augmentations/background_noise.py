@@ -21,6 +21,7 @@ class BackgroundNoiseParameters(AugmentationParameters):
     snr: torch.FloatTensor
     clean_loudness: torch.FloatTensor
     noise_loudness: torch.FloatTensor
+    gain: torch.FloatTensor
 
 
 class BackgroundNoise(Augmentation):
@@ -39,12 +40,6 @@ class BackgroundNoise(Augmentation):
 
         self.min_snr = min_snr
         self.max_snr = max_snr
-
-    def load_noise(self, index: dict):
-        audioinfo = AudioInfo(**index)
-        audioinfo.filepath = (self.data_folder / audioinfo.filepath).as_posix()
-        noise = Audio.from_audioinfo(audioinfo)
-        return noise
 
     def _sample_parameters(
         self,
@@ -65,10 +60,17 @@ class BackgroundNoise(Augmentation):
             pad = audio.waveform.shape[-1] - noise.waveform.shape[-1]
             noise._waveform = F.pad(noise._waveform, (0, pad))
         snr = truncated_normal(
-            tuple(), min_val=self.min_snr, max_val=self.max_snr
+            tuple(),
+            min_val=self.min_snr,
+            max_val=self.max_snr,
+            generator=generator,
         )
         clean_loudness = torch.as_tensor(audio.loudness).to(device=audio.device)
         noise_loudness = torch.as_tensor(noise.loudness).to(device=noise.device)
+        noise_loudness = noise_loudness.clamp(min=-43)
+
+        gain = clean_loudness - noise_loudness - snr
+        gain = torch.exp(math.log(10) / 20 * gain)
 
         return BackgroundNoiseParameters(
             noise_filepath=noise.filepath,
@@ -76,6 +78,7 @@ class BackgroundNoise(Augmentation):
             snr=snr,
             clean_loudness=clean_loudness,
             noise_loudness=noise_loudness,
+            gain=gain,
         )
 
     @torch.inference_mode()
@@ -97,11 +100,15 @@ class BackgroundNoise(Augmentation):
         clean_loudness = parameters.clean_loudness
         noise_loudness = parameters.noise_loudness
         snr = parameters.snr
+        gain = parameters.gain
 
-        gain = clean_loudness - noise_loudness - snr
-        gain = torch.exp(math.log(10) / 20 * gain)
-        gain = gain.view(-1, 1, 1)
+        # gain = clean_loudness - noise_loudness - snr
+        # gain = torch.exp(math.log(10) / 20 * gain)
+        gain = gain.view(-1, 1, 1)  # .clamp(max=3.5)
         gain = gain.to(device, non_blocking=True)
+        noise = gain * noise
+        # if noise.abs().max() > 1:
+        #     noise /= noise.abs().max()
 
-        waveform[apply] = waveform[apply] + (gain * noise)
+        waveform[apply] = waveform[apply] + noise
         return waveform

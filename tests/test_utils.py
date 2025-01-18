@@ -3,13 +3,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from senhance.data.utils import load_audio, resample
+from senhance.data.utils import load_waveform, resample
 
 test_file_path = Path(__file__).parent / "assets/physicsworks.wav"
 
 
-def test_load_audio_dtype():
-    loaded, sr = load_audio(test_file_path.as_posix())
+def test_load_waveform_dtype():
+    loaded, sr = load_waveform(test_file_path.as_posix())
     assert loaded.dtype == np.int16
     assert isinstance(loaded, np.ndarray)
     assert loaded.ndim == 2
