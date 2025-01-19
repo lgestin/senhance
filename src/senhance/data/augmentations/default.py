@@ -11,6 +11,7 @@ from senhance.data.augmentations.filters import (
     LowPass,
     LowPassResample,
 )
+from senhance.data.augmentations.random_noise import RandomNoise
 from senhance.data.augmentations.reverb import Reverb
 from senhance.data.augmentations.silence import Silence
 from senhance.data.source import ArrowAudioSource
@@ -27,6 +28,8 @@ def get_default_augmentation(
         noise_folder = Path(noise_folder)
 
     silence = Silence(p=0.025)
+
+    random_noise = RandomNoise(min_amplitude=0.001, max_amplitude=0.03, p=0.5)
 
     background_noises = []
     background_noise_paths = [
@@ -125,29 +128,12 @@ def get_default_augmentation(
         name="filters",
         p=0.4,
     )
-    # augmentation = filter
     augmentation = Chain(
         # silence,
+        random_noise,
         background_noise,
         reverb,
         filters,
         p=p,
     )
-    # # augmentation = LowPassResample(4000)
-    # augmentation = Choose(
-    #     BackgroundNoise(
-    #         fsdnoisy18k,
-    #         min_snr=5.0,
-    #         max_snr=25.0,
-    #         name="fsdnoisy_18k",
-    #     ),
-    #     BackgroundNoise(
-    #         urabansound8k,
-    #         min_snr=5.0,
-    #         max_snr=25.0,
-    #         name="urnansound",
-    #     ),
-    #     weights=[0.5, 0.5],
-    #     p=1,
-    # )
     return augmentation

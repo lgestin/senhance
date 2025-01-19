@@ -3,7 +3,7 @@ import pytest
 from senhance.data.audio import Audio
 from senhance.data.augmentations.chain import Chain
 from senhance.data.augmentations.choose import Choose
-from senhance.data.augmentations.gaussian_noise import GaussianNoise
+from senhance.data.augmentations.random_noise import RandomNoise
 
 from . import AUDIO_TEST_FILES
 from .utils import _test_augment
@@ -14,10 +14,10 @@ def test_chain(audio_file_path):
     audio = Audio(audio_file_path)
     augment = Chain(
         Choose(
-            GaussianNoise(min_amplitude=10, max_amplitude=10),
-            GaussianNoise(min_amplitude=100, max_amplitude=100),
+            RandomNoise(min_amplitude=10, max_amplitude=10),
+            RandomNoise(min_amplitude=100, max_amplitude=100),
         ),
-        GaussianNoise(min_amplitude=1, max_amplitude=1),
+        RandomNoise(min_amplitude=1, max_amplitude=1),
         p=0.5,
     )
 
