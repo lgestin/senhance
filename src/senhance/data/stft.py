@@ -25,10 +25,26 @@ class STFT(nn.Module):
             hop_length=self.hop_length,
             win_length=self.n_fft,
             window=self.window,
-            center=False,
+            normalized=False,
+            # center=False,
             return_complex=True,
         )
         return stft
+
+    def istft(self, stft: torch.Tensor, length: int = None) -> torch.Tensor:
+        p = (self.n_fft - self.hop_length) // 2
+        waveform = torch.istft(
+            stft,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            win_length=self.n_fft,
+            window=self.window,
+            normalized=False,
+            # center=False,
+            return_complex=False,
+            length=length + 2 * p,
+        )[..., p:-p].unsqueeze(1)
+        return waveform
 
     def magnitudes(self, x: torch.Tensor) -> torch.Tensor:
         stft = self.stft(x)
@@ -57,7 +73,9 @@ class MelSpectrogram(STFT):
             mel_scale="htk",
             sample_rate=sample_rate,
         )
-        self.register_buffer("melscale_fbanks", melscale_fbanks, persistent=False)
+        self.register_buffer(
+            "melscale_fbanks", melscale_fbanks, persistent=False
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         magnitudes = super().magnitudes(x)

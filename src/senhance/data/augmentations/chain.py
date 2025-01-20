@@ -7,6 +7,7 @@ from senhance.data.augmentations.augmentations import (
     Augmentation,
     AugmentationParameters,
     BatchAugmentationParameters,
+    STFTAugmentation,
 )
 
 
@@ -90,12 +91,22 @@ class Chain(Augmentation):
             return waveform
 
         augmented = waveform[parameters.apply]
+        stft, length = None, augmented.shape[-1]
         for augment_i, params_i in zip(
             self.augmentations, parameters.params, strict=True
         ):
-            augmented = augment_i.augment(
-                waveform=augmented,
-                parameters=params_i,
-            )
+            if isinstance(augment_i, STFTAugmentation):
+                if stft is None:
+                    stft = Audio.stfter.stft(augmented)
+                    length = augmented.shape[-1]
+                stft = augment_i.augment(stft, parameters=params_i)
+            else:
+                if stft is not None:
+                    augmented = Audio.stfter.istft(stft, length=length)
+                    stft = None
+                augmented = augment_i.augment(augmented, parameters=params_i)
+        if stft is not None:
+            print(augment_i)
+            augmented = Audio.stfter.istft(stft, length=length)
         waveform[parameters.apply] = augmented
         return waveform

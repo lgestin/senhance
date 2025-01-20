@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 
 import numpy as np
 import torch
@@ -160,6 +160,35 @@ class Augmentation:
         return augmented
 
 
+class STFTAugmentation(Augmentation):
+    def augment(
+        self,
+        stft: torch.Tensor,
+        parameters: BatchAugmentationParameters,
+    ) -> torch.Tensor:
+        return self._augment(stft=stft, parameters=parameters)
+
+    def _augment(
+        self,
+        stft: torch.Tensor,
+        parameters: BatchAugmentationParameters,
+    ) -> torch.Tensor:
+        """
+        everything related to torch.Tensor
+        """
+        raise NotImplementedError
+
+    def __call__(self, audio: Audio, generator: torch.Generator = None):
+        parameters = self.sample_parameters(audio=audio, generator=generator)
+        print(audio.waveform.shape)
+        stft = Audio.stfter.stft(audio.waveform)
+        print(stft.shape)
+        length = audio.waveform.shape[-1]
+        stft = self.augment(stft=stft, parameters=parameters)
+        augmented = Audio.stfter.istft(stft, length=length)
+        return augmented
+
+
 class Identity(Augmentation):
     def sample_parameters(
         self,
@@ -169,29 +198,9 @@ class Identity(Augmentation):
         apply = torch.rand(tuple(), generator=generator) <= self.p
         return AugmentationParameters(apply=apply)
 
-    def augment(
+    def _augment(
         self,
         waveform: torch.Tensor,
         parameters: BatchAugmentationParameters,
     ) -> torch.Tensor:
-        apply = parameters.apply
-        augmented = waveform.clone()
-        augmented[apply] = waveform[apply]
-        return augmented
-
-
-class TestTransform:
-    def __init__(self):
-        from audiotools import ransforms as tfm
-
-        self.transform = tfm.Compose(
-            tfm.LowPass(cutoff=("uniform", 4000, 8000)),
-            tfm.ClippingDistortion(),
-            tfm.TimeMask(),
-        )
-
-    def transform(self, waveform: torch.Tensor, params: dict) -> torch.Tensor:
-        return self.transform(waveform, **params)
-
-    def instantiate(self, state=None, signal=None):
-        return self.transform.instantiate(state=state, signal=signal)
+        return waveform

@@ -6,6 +6,7 @@ import soundfile as sf
 import torch
 import torchaudio.functional as F
 
+from senhance.data.stft import STFT
 from senhance.data.utils import load_waveform, resample
 
 
@@ -18,6 +19,8 @@ class AudioInfo:
 
 
 class Audio:
+    stfter: STFT = STFT(n_fft=1024, hop_length=256)
+
     def __init__(
         self,
         filepath: str = None,
@@ -39,6 +42,7 @@ class Audio:
         self.start_s = start_s
         self.end_s = end_s
         self._loudness = loudness
+        self._stft = None
 
     def to(self, device: str | torch.device):
         self.waveform.to(device, non_blocking=True)
@@ -70,6 +74,14 @@ class Audio:
             self._waveform = waveform
             self._sample_rate = sr
         return waveform
+
+    @property
+    def stft(self):
+        stft = self._stft
+        if stft is None:
+            stft = Audio.stfter.stft(self.waveform)
+            self._stft = stft
+        return stft
 
     @property
     def info(self):
@@ -119,6 +131,7 @@ class Audio:
         )
         resampled = torch.from_numpy(resampled) / 32678.0
         self._waveform = resampled
+        self._stft = None
         self._sample_rate = sample_rate
         return self
 
@@ -126,6 +139,7 @@ class Audio:
         gain = db - self.loudness
         gain = math.exp(math.log(10) / 20 * gain)
         self._waveform = gain * self.waveform
+        self._stft = None
         self._loudness = db
         return self
 

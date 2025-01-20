@@ -14,6 +14,7 @@ from senhance.data.augmentations.filters import (
 from senhance.data.augmentations.random_noise import RandomNoise
 from senhance.data.augmentations.reverb import Reverb
 from senhance.data.augmentations.silence import Silence
+from senhance.data.augmentations.specaug import SpecAugFreq, SpecAugTime
 from senhance.data.source import ArrowAudioSource
 
 
@@ -126,14 +127,24 @@ def get_default_augmentation(
         band_pass,
         weights=[0.4, 0.4, 0.2],
         name="filters",
-        p=0.4,
     )
+    specaug = Choose(
+        SpecAugFreq(min_freq_perc_mask=0.1, max_freq_perc_mask=0.35),
+        SpecAugTime(min_time_perc_mask=0.05, max_time_perc_mask=0.15),
+        Chain(
+            SpecAugFreq(min_freq_perc_mask=0.1, max_freq_perc_mask=0.35),
+            SpecAugTime(min_time_perc_mask=0.05, max_time_perc_mask=0.15),
+        ),
+        weights=[0.4, 0.4, 0.2],
+    )
+    freq_aug = Choose(filters, specaug, p=0.4)
+
     augmentation = Chain(
         # silence,
         random_noise,
         background_noise,
         reverb,
-        filters,
+        freq_aug,
         p=p,
     )
     return augmentation

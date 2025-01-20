@@ -4,6 +4,7 @@ from senhance.data.audio import Audio
 from senhance.data.augmentations.chain import Chain
 from senhance.data.augmentations.choose import Choose
 from senhance.data.augmentations.random_noise import RandomNoise
+from senhance.data.augmentations.specaug import SpecAugFreq, SpecAugTime
 
 from . import AUDIO_TEST_FILES
 from .utils import _test_augment
@@ -20,7 +21,28 @@ def test_chain(audio_file_path):
         RandomNoise(min_amplitude=1, max_amplitude=1),
         p=0.5,
     )
+    _test_augment(augment=augment, audio=audio)
 
+    augment = Chain(
+        RandomNoise(0.5, 0.6),
+        SpecAugFreq(0.1, 0.3),
+        RandomNoise(0.5, 0.6),
+        SpecAugTime(0.1, 0.3),
+        RandomNoise(0.5, 0.6),
+        p=0.5,
+    )
+    _test_augment(augment=augment, audio=audio)
+
+    augment = Chain(
+        Chain(
+            RandomNoise(0.5, 0.6),
+            SpecAugFreq(0.1, 0.3),
+        ),
+        RandomNoise(0.5, 0.6),
+        SpecAugTime(0.1, 0.3),
+        RandomNoise(0.5, 0.6),
+        p=0.5,
+    )
     _test_augment(augment=augment, audio=audio)
 
 
