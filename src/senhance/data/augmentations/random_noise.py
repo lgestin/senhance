@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 
 import torch
@@ -23,8 +24,8 @@ class RandomNoise(Augmentation):
         self,
         min_amplitude: float,
         max_amplitude: float,
-        min_f_decay: float = -2,
-        max_f_decay: float = 2,
+        min_f_decay: float = -6,
+        max_f_decay: float = 6,
         name: str = "random_noise",
         p: float = 1.0,
     ):
@@ -51,12 +52,24 @@ class RandomNoise(Augmentation):
             + self.min_f_decay
         )
         sample_rate = audio.sample_rate
+
+        f = torch.fft.rfftfreq(64, sample_rate)
+        f[0] = 1.0
+
+        decay = torch.ones(64 // 2 + 1, dtype=torch.cfloat)
+        decay = torch.sqrt(1 / f**f_decay)
+        decay_ir = torch.fft.irfft(decay)
         noise = torch.randn(
             audio.waveform.shape,
             device=audio.waveform.device,
             dtype=audio.waveform.dtype,
             generator=generator,
         )
+        noise = torch.nn.functional.conv1d(
+            noise, decay_ir[None, None], padding=32
+        )[..., : audio.waveform.shape[-1]]
+        noise /= torch.sqrt(torch.mean(noise.pow(2)))
+
         return RandomNoiseParameters(
             amplitude=amplitude,
             noise=noise,
@@ -73,26 +86,13 @@ class RandomNoise(Augmentation):
         if isinstance(parameters, AugmentationParameters):
             parameters = parameters.collate([parameters])
 
-        if not torch.any(parameters.apply):
+        if parameters is None or (not torch.any(parameters.apply)):
             return waveform
 
         apply = parameters.apply
         noise = parameters.noise.to(waveform.device, non_blocking=True)
-        sample_rate = parameters.sample_rate[0]
-        f_decay = parameters.f_decay.view(-1, 1, 1)
-        noise_rfft = torch.fft.rfft(noise)
-        mask = 1 / (
-            torch.linspace(
-                1,
-                (sample_rate / 2) ** 0.5,
-                noise_rfft.shape[-1],
-                device=waveform.device,
-            )[None, None]
-            ** f_decay
+        amplitude = parameters.amplitude.view(-1, 1, 1).to(
+            waveform.device, non_blocking=True
         )
-        noise_rfft *= mask
-        noise = torch.fft.irfft(noise_rfft)
-
-        amplitude = parameters.amplitude.view(-1, 1, 1)
         waveform[apply] += amplitude * noise
         return waveform

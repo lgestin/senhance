@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+from senhance.data.audio import Audio
 from senhance.data.augmentations.default import get_default_augmentation
 from senhance.data.collate import collate
 from senhance.data.dataset import AudioDataset
@@ -41,12 +42,16 @@ class TrainingConfig:
     max_steps: int = 1_000_000
     val_steps: int = 5_000
     smp_steps: int = 5_000
+    checkpoint_steps: int = 25_000
     n_val: int = 8192
     n_smp: int = 8
 
     n_workers: int = 8
     nocompile: bool = False
     noamp: bool = False
+
+    def __post_init__(self):
+        assert self.checkpoint_steps % self.val_steps == 0
 
 
 def train(exp_path: str, config: TrainingConfig):
@@ -59,7 +64,7 @@ def train(exp_path: str, config: TrainingConfig):
     codec = DescriptAudioCodec(path=config.codec_path)
     codec = codec.eval()
     codec = codec.freeze()
-    codec = codec.to(device)
+    codec = codec.to(device, non_blocking=True)
     codec = torch.compile(codec, disable=not config.nocompile)
     mel_spectrogram = MelSpectrogram(
         n_fft=1024,
@@ -67,7 +72,8 @@ def train(exp_path: str, config: TrainingConfig):
         n_mels=80,
         sample_rate=config.sample_rate,
     )
-    mel_spectrogram = mel_spectrogram.to(device)
+    mel_spectrogram = mel_spectrogram.to(device, non_blocking=True)
+    Audio.stfter.to(device, non_blocking=True)
 
     ### AUGMENTS
     sequence_length_s = config.sequence_length_n_tokens / codec.resolution_hz
@@ -133,7 +139,8 @@ def train(exp_path: str, config: TrainingConfig):
     )
 
     test_audio_source = ArrowAudioSource(
-        speech_folder / "data.test.arrow",
+        # speech_folder / "data.test.arrow",
+        Path("/data/denoising/speech/daps/clean") / "data.train.arrow",
         sequence_length_s=sequence_length_s,
     )
     test_dataset = AudioDataset(
@@ -153,11 +160,11 @@ def train(exp_path: str, config: TrainingConfig):
         t_dim=config.n_dim,
     )
     unet = UNET1d(unet_dims)
-    unet = unet.to(device)
+    unet = unet.to(device, non_blocking=True)
     unet = torch.compile(unet, disable=not config.nocompile)
 
     cflow_matcher = ConditionalFlowMatcher(unet)
-    cflow_matcher = cflow_matcher.to(device)
+    cflow_matcher = cflow_matcher.to(device, non_blocking=True)
 
     opt = torch.optim.AdamW(
         cflow_matcher.parameters(),
@@ -169,11 +176,14 @@ def train(exp_path: str, config: TrainingConfig):
 
     step, best_loss = 0, torch.inf
     if config.checkpoint_path:
-        checkpoint = Checkpoint.load(config.checkpoint_path)
+        checkpoint = Checkpoint.load(
+            config.checkpoint_path, map_location=device
+        )
         step, best_loss = checkpoint.step, checkpoint.best_loss
         cflow_matcher.load_state_dict(checkpoint.model)
         opt.load_state_dict(checkpoint.opt)
         scaler.load_state_dict(checkpoint.scaler)
+    best_checkpoint_path = Path(exp_path) / "checkpoint.best.pt"
 
     def process_batch(batch):
         batch = batch.to(device)
@@ -255,7 +265,9 @@ def train(exp_path: str, config: TrainingConfig):
         log_waveform(clean, f"{i}/clean", 0)
         log_waveform(reconstructed, f"{i}/reconstructed", 0)
 
-    pbar = tqdm(total=config.max_steps, unit="batch", smoothing=0.1)
+    pbar = tqdm(
+        initial=step, total=config.max_steps, unit="batch", smoothing=0.1
+    )
     while step < config.max_steps:
         for batch in train_dloader:
             if step % config.smp_steps == 0:
@@ -292,6 +304,7 @@ def train(exp_path: str, config: TrainingConfig):
                 for key, values in val_metrics.items():
                     writer.add_scalar(f"valid/{key}", values, step)
 
+            if step % config.checkpoint_steps == 0:
                 checkpoint = Checkpoint(
                     codec=codec.__class__.__name__,
                     step=step,
@@ -301,10 +314,11 @@ def train(exp_path: str, config: TrainingConfig):
                     opt=opt.state_dict(),
                     scaler=scaler.state_dict(),
                 )
-                checkpoint.save(Path(exp_path) / f"checkpoint.{step}.pt")
+                checkpoint_path = Path(exp_path) / f"checkpoint.{step}.pt"
+                checkpoint.save(checkpoint_path)
                 if (loss := val_metrics["loss"]) < best_loss:
                     best_loss = loss
-                    checkpoint.save(Path(exp_path) / "checkpoint.best.pt")
+                    best_checkpoint_path.symlink_to(checkpoint_path)
 
             cflow_matcher.train()
             metrics = process_batch(batch)

@@ -106,7 +106,6 @@ class Chain(Augmentation):
                     stft = None
                 augmented = augment_i.augment(augmented, parameters=params_i)
         if stft is not None:
-            print(augment_i)
             augmented = Audio.stfter.istft(stft, length=length)
         waveform[parameters.apply] = augmented
         return waveform

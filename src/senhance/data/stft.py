@@ -17,6 +17,7 @@ class STFT(nn.Module):
         return self.magnitudes(x)
 
     def stft(self, x: torch.Tensor) -> torch.Tensor:
+        self.window = self.window.to(x.device, non_blocking=True)
         p = (self.n_fft - self.hop_length) // 2
         x = F.pad(x, (p, p), "reflect").squeeze(1)
         stft = torch.stft(
@@ -32,6 +33,7 @@ class STFT(nn.Module):
         return stft
 
     def istft(self, stft: torch.Tensor, length: int = None) -> torch.Tensor:
+        self.window = self.window.to(stft.device, non_blocking=True)
         p = (self.n_fft - self.hop_length) // 2
         waveform = torch.istft(
             stft,

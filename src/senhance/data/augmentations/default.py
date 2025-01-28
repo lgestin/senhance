@@ -30,7 +30,7 @@ def get_default_augmentation(
 
     silence = Silence(p=0.025)
 
-    random_noise = RandomNoise(min_amplitude=0.001, max_amplitude=0.03, p=0.5)
+    random_noise = RandomNoise(min_amplitude=0.001, max_amplitude=0.02, p=0.5)
 
     background_noises = []
     background_noise_paths = [

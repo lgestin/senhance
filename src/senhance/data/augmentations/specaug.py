@@ -60,10 +60,11 @@ class SpecAugDim(STFTAugmentation):
 
         apply = parameters.apply
 
+        device = stft.device
         n = stft.shape[self.dim]
-        start, perc = parameters.start, parameters.perc_mask
-        print(start, perc, n, self.dim, stft.shape)
-        arange = torch.arange(n)[None].unsqueeze(self.other_dim)
+        start = parameters.start.to(device, non_blocking=True)
+        perc = parameters.perc_mask.to(device, non_blocking=True)
+        arange = torch.arange(n, device=device)[None].unsqueeze(self.other_dim)
         perc = (n * perc).long()[:, None, None]
         start = (n * start).long()[:, None, None]
         end = start + perc

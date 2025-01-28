@@ -20,10 +20,24 @@ class Checkpoint:
         self.executor = ThreadPoolExecutor(1)
 
     def save(self, path: str):
-        def save():
-            torch.save(asdict(self), path)
+        state_dict = asdict(self)
+        state_dict["model"] = {
+            k: v.to(device="cpu", non_blocking=True)
+            for k, v in state_dict.pop("model").items()
+        }
+        state_dict["opt"] = {
+            k: v.to(dtype=torch.float16, device="cpu", non_blocking=True)
+            if torch.is_tensor(v)
+            else v
+            for k, v in state_dict.pop("opt").items()
+        }
 
-        self.executor.submit(save)
+        def save():
+            torch.save(state_dict, path)
+
+        # self.executor.submit(save)
+        save()
+
         return
 
     @classmethod

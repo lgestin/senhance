@@ -180,9 +180,7 @@ class STFTAugmentation(Augmentation):
 
     def __call__(self, audio: Audio, generator: torch.Generator = None):
         parameters = self.sample_parameters(audio=audio, generator=generator)
-        print(audio.waveform.shape)
         stft = Audio.stfter.stft(audio.waveform)
-        print(stft.shape)
         length = audio.waveform.shape[-1]
         stft = self.augment(stft=stft, parameters=parameters)
         augmented = Audio.stfter.istft(stft, length=length)
