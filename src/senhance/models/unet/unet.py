@@ -65,9 +65,9 @@ class Block(TimestepAwareModule):
         x = self.conv1(x)
         x = x * (emb + 1)
         x = self.conv2(x)
-        x = mp_sum(x, x_skip, t=0.3)
+        x = mp_sum(x_skip, x, t=0.3)
         if self.attn:
-            x = mp_sum(x, self.attn(x), t=0.3)
+            x = mp_sum(self.attn(x), x, t=0.3)
         return x
 
 

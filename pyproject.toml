@@ -15,7 +15,11 @@ authors = [
 ]
 dependencies = [
   "av",
+  "flow_matching",
+  "diffusers",
+  "transformers",
   "pyarrow",
+  "torchsde",
   "torch>=2.5.0",
   "torchaudio>=2.5.0",
   "torchvision",

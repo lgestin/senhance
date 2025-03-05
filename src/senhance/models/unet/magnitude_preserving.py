@@ -31,7 +31,7 @@ def mp_cat(a, b, dim=1, t=0.5):
     return torch.cat([wa * a, wb * b], dim=dim)
 
 
-def timestep_embedding(timesteps, dim, max_period=10000):
+def timestep_embedding(timesteps, dim, time_factor=1000.0, max_period=10000):
     """Create sinusoidal timestep embeddings.
 
     :param timesteps: a 1-D Tensor of N indices, one per batch element. These may be fractional.
@@ -39,6 +39,7 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     :param max_period: controls the minimum frequency of the embeddings.
     :return: an [N x dim] Tensor of positional embeddings.
     """
+    timesteps = timesteps * time_factor
     half = dim // 2
     freqs = torch.exp(
         -math.log(max_period)

@@ -16,6 +16,7 @@ from senhance.data.stft import MelSpectrogram
 from senhance.models.cfm.cfm import ConditionalFlowMatcher
 from senhance.models.checkpoint import Checkpoint
 from senhance.models.codec.dac import DescriptAudioCodec
+from senhance.models.codec.stable_audio import StableAudioVAE
 from senhance.models.unet.unet import UNET1d, UNET1dDims
 
 
@@ -33,7 +34,6 @@ class TrainingConfig:
     n_dim: int = 1024
     n_layers: int = 10
 
-    sample_rate: int = 24_000  # mimi sample_rate
     sequence_length_n_tokens: int = 64
     batch_size: int = 64
     lr: float = 3e-4
@@ -62,15 +62,17 @@ def train(exp_path: str, config: TrainingConfig):
 
     # CODEC
     codec = DescriptAudioCodec(path=config.codec_path)
+    # codec = StableAudioVAE()
     codec = codec.eval()
     codec = codec.freeze()
     codec = codec.to(device, non_blocking=True)
-    codec = torch.compile(codec, disable=not config.nocompile)
+    codec = torch.compile(codec, disable=config.nocompile)
+    sample_rate = codec.sample_rate
     mel_spectrogram = MelSpectrogram(
         n_fft=1024,
         hop_length=256,
         n_mels=80,
-        sample_rate=config.sample_rate,
+        sample_rate=sample_rate,
     )
     mel_spectrogram = mel_spectrogram.to(device, non_blocking=True)
     Audio.stfter.to(device, non_blocking=True)
@@ -79,28 +81,27 @@ def train(exp_path: str, config: TrainingConfig):
     sequence_length_s = config.sequence_length_n_tokens / codec.resolution_hz
     train_augments = get_default_augmentation(
         noise_folder="/data/denoising/noise/",
-        sample_rate=config.sample_rate,
+        sample_rate=sample_rate,
         sequence_length_s=sequence_length_s,
         split="train",
         p=0.98,
     )
     valid_augments = get_default_augmentation(
         noise_folder="/data/denoising/noise/",
-        sample_rate=config.sample_rate,
+        sample_rate=sample_rate,
         sequence_length_s=sequence_length_s,
         split="valid",
         p=0.98,
     )
     test_augments = get_default_augmentation(
         noise_folder="/data/denoising/noise/",
-        sample_rate=config.sample_rate,
+        sample_rate=sample_rate,
         sequence_length_s=sequence_length_s,
         split="test",
         p=1.0,
     )
 
     # SPEECH
-    sr = config.sample_rate
     speech_folder = Path(config.speech_folder)
     train_audio_source = ArrowAudioSource(
         speech_folder / "data.train.arrow",
@@ -108,7 +109,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
     train_dataset = AudioDataset(
         train_audio_source,
-        sample_rate=sr,
+        sample_rate=sample_rate,
         augmentation=train_augments,
     )
     train_dloader = DataLoader(
@@ -126,7 +127,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
     valid_dataset = AudioDataset(
         valid_audio_source,
-        sample_rate=sr,
+        sample_rate=sample_rate,
         augmentation=valid_augments,
     )
     valid_dataset = Subset(valid_dataset, list(range(config.n_val)))
@@ -145,7 +146,7 @@ def train(exp_path: str, config: TrainingConfig):
     )
     test_dataset = AudioDataset(
         test_audio_source,
-        sample_rate=sr,
+        sample_rate=sample_rate,
         augmentation=test_augments,
     )
     test_dloader = DataLoader(
@@ -161,7 +162,6 @@ def train(exp_path: str, config: TrainingConfig):
     )
     unet = UNET1d(unet_dims)
     unet = unet.to(device, non_blocking=True)
-    unet = torch.compile(unet, disable=not config.nocompile)
 
     cflow_matcher = ConditionalFlowMatcher(unet)
     cflow_matcher = cflow_matcher.to(device, non_blocking=True)
@@ -180,9 +180,11 @@ def train(exp_path: str, config: TrainingConfig):
             config.checkpoint_path, map_location=device
         )
         step, best_loss = checkpoint.step, checkpoint.best_loss
-        cflow_matcher.load_state_dict(checkpoint.model)
+        unet.load_state_dict(checkpoint.model)
         opt.load_state_dict(checkpoint.opt)
         scaler.load_state_dict(checkpoint.scaler)
+
+    unet = torch.compile(unet, disable=config.nocompile)
     best_checkpoint_path = Path(exp_path) / "checkpoint.best.pt"
 
     def process_batch(batch):
@@ -203,12 +205,12 @@ def train(exp_path: str, config: TrainingConfig):
 
         timestep = torch.rand((clean.shape[0],), device=device)
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
-            vt, ut = cflow_matcher(
+            u_t, path_sample = cflow_matcher(
                 x_0=x_noisy,
                 x_1=x_clean,
                 timestep=timestep,
             )
-            loss = torch.nn.functional.mse_loss(ut, vt)
+            loss = torch.nn.functional.mse_loss(path_sample.dx_t, u_t)
 
         if cflow_matcher.training:
             opt.zero_grad()
@@ -241,7 +243,7 @@ def train(exp_path: str, config: TrainingConfig):
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             x_noisy = codec.normalize(codec.encode(noisy))
 
-        timesteps = torch.linspace(0, 1, config.n_cfm_steps).tolist()
+        timesteps = torch.linspace(0, 1, config.n_cfm_steps)
         x_cleaned = cflow_matcher.sample(x_0=x_noisy, timesteps=timesteps)
         with torch.no_grad():
             cleaned = codec.decode(codec.unnormalize(x_cleaned))
@@ -249,7 +251,7 @@ def train(exp_path: str, config: TrainingConfig):
 
     @torch.inference_mode()
     def log_waveform(waveform, tag: str, step: int):
-        writer.add_audio(f"{tag}.wav", waveform, step, sr)
+        writer.add_audio(f"{tag}.wav", waveform, step, sample_rate)
         mels = mel_spectrogram(waveform[None].to(device)).log()
         mels = mels.flip(1)
         mels = (mels - mels.min()) / (mels.max() - mels.min())
@@ -309,15 +311,16 @@ def train(exp_path: str, config: TrainingConfig):
                     codec=codec.__class__.__name__,
                     step=step,
                     best_loss=best_loss,
-                    dims=cflow_matcher.module.dims,
-                    model=cflow_matcher.state_dict(),
-                    opt=opt.state_dict(),
-                    scaler=scaler.state_dict(),
+                    dims=unet.dims,
+                    model=unet,
+                    opt=opt,
+                    scaler=scaler,
                 )
                 checkpoint_path = Path(exp_path) / f"checkpoint.{step}.pt"
                 checkpoint.save(checkpoint_path)
                 if (loss := val_metrics["loss"]) < best_loss:
                     best_loss = loss
+                    best_checkpoint_path.unlink(missing_ok=True)
                     best_checkpoint_path.symlink_to(checkpoint_path)
 
             cflow_matcher.train()

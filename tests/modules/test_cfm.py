@@ -15,12 +15,14 @@ def test_cfm():
     x_0 = torch.randn(batch_size, dim, 128)
     x_1 = torch.randn_like(x_0)
     t = torch.full((batch_size,), 0.5)
-    v_t, u_t = cfm.forward(x_0=x_0, x_1=x_1, timestep=t)
+    u_t, path_sample = cfm.forward(x_0=x_0, x_1=x_1, timestep=t)
 
-    assert torch.is_tensor(u_t) and torch.is_tensor(v_t)
-    assert u_t.shape == v_t.shape
+    assert torch.is_tensor(u_t)
+    assert torch.is_tensor(path_sample.x_t)
+    assert torch.is_tensor(path_sample.dx_t)
+    assert u_t.shape == path_sample.dx_t.shape
     assert u_t.shape == x_0.shape
-    assert v_t.shape == x_0.shape
+    assert path_sample.x_t.shape == x_0.shape
 
 
 if __name__ == "__main__":

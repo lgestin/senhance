@@ -101,7 +101,7 @@ def get_default_augmentation(
     low_pass_freqs_hz = (
         sample_rate // 4
         + (sample_rate // 2 - sample_rate // 4) * low_pass_freqs_hz
-    )
+    ).long()
     low_passes = [
         LowPassResample(freq_hz=freq_hz) for freq_hz in low_pass_freqs_hz
     ]
@@ -110,7 +110,7 @@ def get_default_augmentation(
     high_pass_freqs_hz = (
         sample_rate // 4
         + (sample_rate // 2 - sample_rate // 4) * high_pass_freqs_hz
-    )
+    ).long()
     high_passes = [HighPass(freq_hz=freq_hz) for freq_hz in high_pass_freqs_hz]
     high_pass = Choose(*high_passes, name="high_passes", p=1.0)
 
