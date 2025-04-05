@@ -45,7 +45,7 @@ class STFT(nn.Module):
             # center=False,
             return_complex=False,
             length=length + 2 * p,
-        )[..., p:-p].unsqueeze(1)
+        )[..., p:-p]
         return waveform
 
     def magnitudes(self, x: torch.Tensor) -> torch.Tensor:
@@ -75,9 +75,7 @@ class MelSpectrogram(STFT):
             mel_scale="htk",
             sample_rate=sample_rate,
         )
-        self.register_buffer(
-            "melscale_fbanks", melscale_fbanks, persistent=False
-        )
+        self.register_buffer("melscale_fbanks", melscale_fbanks, persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         magnitudes = super().magnitudes(x)

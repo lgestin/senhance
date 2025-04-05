@@ -28,17 +28,16 @@ class TrainingConfig:
 
     checkpoint_path: str = None
 
-    sigma_0: float = 1.0
-    sigma_1: float = 1e-7
-
     n_dim: int = 1024
     n_layers: int = 10
 
     sequence_length_n_tokens: int = 64
     batch_size: int = 64
     lr: float = 3e-4
+    t_lognorm_m: float = 0.5
+    t_lognorm_s: float = 0.6
 
-    n_cfm_steps: int = 10
+    n_cfm_steps: int = 50
     max_steps: int = 1_000_000
     val_steps: int = 5_000
     smp_steps: int = 5_000
@@ -203,7 +202,10 @@ def train(exp_path: str, config: TrainingConfig):
                 x_clean = x_clean
                 x_noisy = x_noisy
 
-        timestep = torch.rand((clean.shape[0],), device=device)
+        timestep = torch.randn((clean.shape[0],), device=device)
+        timestep = timestep * config.lognorm_s + config.lognorm_m
+        timestep = timestep.sigmoid()
+
         with torch.autocast(device_type=device_dtype, enabled=config.noamp):
             u_t, path_sample = cflow_matcher(
                 x_0=x_noisy,
