@@ -1,25 +1,26 @@
-import pytest
-
-from senhance.data.audio import Audio
+from senhance.data.augmentations.distributions import Uniform
 from senhance.data.augmentations.random_noise import RandomNoise
 
-from . import AUDIO_TEST_FILES
 from .utils import _test_augment
 
 
-@pytest.mark.parametrize("audio_file_path", AUDIO_TEST_FILES)
-def test_clipping(audio_file_path):
-    audio = Audio(audio_file_path)
+def test_random_noise_from_file(audio_from_file):
+    """Test RandomNoise augmentation with audio loaded from files."""
     augment = RandomNoise(
-        min_amplitude=0.1,
-        max_amplitude=0.3,
-        min_f_decay=-2,
-        max_f_decay=2,
+        amplitude_distribution=Uniform(min=0.1, max=0.3),
+        f_decay_distribution=Uniform(min=-2, max=2),
         p=0.5,
     )
 
-    _test_augment(augment=augment, audio=audio)
+    _test_augment(augment=augment, audio=audio_from_file)
 
 
-if __name__ == "__main__":
-    test_clipping()
+def test_random_noise_random_audio(random_audio):
+    """Test RandomNoise augmentation with randomly generated audio."""
+    augment = RandomNoise(
+        amplitude_distribution=Uniform(min=0.1, max=0.3),
+        f_decay_distribution=Uniform(min=-2, max=2),
+        p=0.5,
+    )
+
+    _test_augment(augment=augment, audio=random_audio)

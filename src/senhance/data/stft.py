@@ -9,15 +9,14 @@ class STFT(nn.Module):
         super().__init__()
         self.n_fft = n_fft
         self.hop_length = hop_length
-
-        window = torch.hann_window(n_fft)
+        window = torch.hamming_window(n_fft)
         self.register_buffer("window", window, persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.magnitudes(x)
 
     def stft(self, x: torch.Tensor) -> torch.Tensor:
-        self.window = self.window.to(x.device, non_blocking=True)
+        self.window = self.window.to(x.device)
         p = (self.n_fft - self.hop_length) // 2
         x = F.pad(x, (p, p), "reflect").squeeze(1)
         stft = torch.stft(
@@ -27,14 +26,16 @@ class STFT(nn.Module):
             win_length=self.n_fft,
             window=self.window,
             normalized=False,
-            # center=False,
+            center=False,
             return_complex=True,
         )
         return stft
 
-    def istft(self, stft: torch.Tensor, length: int = None) -> torch.Tensor:
-        self.window = self.window.to(stft.device, non_blocking=True)
+    def istft(self, stft: torch.Tensor, length: int | None = None) -> torch.Tensor:
+        self.window = self.window.to(stft.device)
         p = (self.n_fft - self.hop_length) // 2
+        if length is not None:
+            length = length + 2 * p
         waveform = torch.istft(
             stft,
             n_fft=self.n_fft,
@@ -42,9 +43,9 @@ class STFT(nn.Module):
             win_length=self.n_fft,
             window=self.window,
             normalized=False,
-            # center=False,
+            center=False,
             return_complex=False,
-            length=length + 2 * p,
+            length=length,
         )[..., p:-p]
         return waveform
 

@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.parametrizations import weight_norm
 
-from senhance.models.unet.magnitude_preserving import (
+from senhance.models.magnitude_preserving import (
     MPConv1d,
     MPConvTranspose1d,
     PixelNorm,
@@ -74,9 +74,7 @@ class Block(TimestepAwareModule):
 class Downsample(nn.Module):
     def __init__(self, dim: int, rate: int):
         super().__init__()
-        self.down = MPConv1d(
-            dim, dim, kernel_size=2 * rate, stride=rate, padding=1
-        )
+        self.down = MPConv1d(dim, dim, kernel_size=2 * rate, stride=rate, padding=1)
 
     def forward(self, x: torch.Tensor):
         return self.down(x)
@@ -210,5 +208,5 @@ class UNET1d(nn.Module):
             x = layer(x, emb)
 
         x = self.out_conv(x)
-        x = mp_sum(x, x_skip)
+        x = mp_sum(x, x_skip.to(x.dtype))
         return x

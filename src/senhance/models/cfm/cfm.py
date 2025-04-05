@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 from flow_matching.path import AffineProbPath
 from flow_matching.path.scheduler import CondOTScheduler
-from flow_matching.solver import ODESolver, Solver
+from flow_matching.solver import ODESolver
 from flow_matching.utils import ModelWrapper
 
 
 class WrappedModel(ModelWrapper):
     def forward(self, x, t):
-        return self.model(x_t=x, timestep=t[None])
+        return self.model(x_t=x, timestep=t[None].expand(x.size(0)))
 
 
 class ConditionalFlowMatcher(nn.Module):
@@ -17,6 +17,11 @@ class ConditionalFlowMatcher(nn.Module):
         self.solver = ODESolver(velocity_model=WrappedModel(module))
         self.module = module
         self.path = AffineProbPath(scheduler=CondOTScheduler())
+
+    @property
+    def device(self) -> torch.device:
+        """Get device of the model's parameters."""
+        return next(self.module.parameters()).device
 
     def forward(
         self,
@@ -34,14 +39,18 @@ class ConditionalFlowMatcher(nn.Module):
 
     @torch.inference_mode()
     def sample(
-        self, x_0: torch.FloatTensor, timesteps: list[float], method="rk4"
+        self,
+        x_0: torch.FloatTensor,
+        timesteps: torch.FloatTensor,
+        method: str = "euler",
+        return_intermediates: bool = False,
     ):
         samples = self.solver.sample(
             time_grid=timesteps,
             x_init=x_0,
             method=method,
-            step_size=0.05,
-            return_intermediates=False,
+            step_size=None,
+            return_intermediates=return_intermediates,
         )
         return samples
 

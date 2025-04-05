@@ -2,7 +2,6 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.attention.flex_attention
 import torch.nn.functional as F
 from einops import rearrange
 from torch.nn.utils.parametrizations import weight_norm
@@ -11,9 +10,7 @@ from torch.nn.utils.parametrizations import weight_norm
 def normalize(x, dim: int = None, eps: float = 1e-8):
     if dim is None:
         dim = list(range(1, x.ndim))
-    norm = torch.linalg.vector_norm(
-        x, dim=dim, keepdim=True, dtype=torch.float32
-    )
+    norm = torch.linalg.vector_norm(x, dim=dim, keepdim=True, dtype=torch.float32)
     norm = torch.add(eps, norm, alpha=math.sqrt(norm.numel() / x.numel()))
     return x / norm.to(x.dtype)
 
@@ -43,17 +40,13 @@ def timestep_embedding(timesteps, dim, time_factor=1000.0, max_period=10000):
     half = dim // 2
     freqs = torch.exp(
         -math.log(max_period)
-        * torch.arange(
-            start=0, end=half, dtype=torch.float32, device=timesteps.device
-        )
+        * torch.arange(start=0, end=half, dtype=torch.float32, device=timesteps.device)
         / half
     )
     args = timesteps[:, None].float() * freqs[None]
     embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
     if dim % 2:
-        embedding = torch.cat(
-            [embedding, torch.zeros_like(embedding[:, :1])], dim=-1
-        )
+        embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
     return math.sqrt(2) * embedding
 
 
@@ -81,9 +74,7 @@ class MPConv1d(nn.Module):
     ):
         super().__init__()
         self.out_channels = out_channels
-        self.weight = nn.Parameter(
-            torch.randn(out_channels, in_channels, kernel_size)
-        )
+        self.weight = nn.Parameter(torch.randn(out_channels, in_channels, kernel_size))
         self.dilation = dilation
         self.stride = stride
         self.groups = groups
@@ -120,9 +111,7 @@ class MPConvTranspose1d(nn.Module):
     ):
         super().__init__()
         self.out_channels = out_channels
-        self.weight = nn.Parameter(
-            torch.randn(in_channels, out_channels, kernel_size)
-        )
+        self.weight = nn.Parameter(torch.randn(in_channels, out_channels, kernel_size))
         self.dilation = dilation
         self.stride = stride
         self.groups = groups
@@ -162,7 +151,7 @@ class SelfAttention(nn.Module):
         qkv = self.qkv(x)
         qkv = rearrange(qkv, "B (K H D) L -> K B H L D", K=3, H=self.num_heads)
         q, k, v = normalize(qkv, dim=-1)
-        x = torch.nn.attention.flex_attention.flex_attention(q, k, v)
+        x = F.scaled_dot_product_attention(q, k, v)
         x = rearrange(x, "B H L D -> B (H D) L")
         x = self.proj(x)
         return x

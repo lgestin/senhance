@@ -3,6 +3,7 @@ import pytest
 from senhance.data.audio import Audio
 from senhance.data.augmentations.chain import Chain
 from senhance.data.augmentations.choose import Choose
+from senhance.data.augmentations.distributions import Uniform
 from senhance.data.augmentations.random_noise import RandomNoise
 
 from . import AUDIO_TEST_FILES
@@ -13,10 +14,19 @@ from .utils import _test_augment
 def test_choose(audio_file_path):
     audio = Audio(audio_file_path)
     augment = Choose(
-        RandomNoise(min_amplitude=10, max_amplitude=10),
+        RandomNoise(
+            amplitude_distribution=Uniform(min=10, max=10),
+            f_decay_distribution=Uniform(min=0, max=0),
+        ),
         Chain(
-            RandomNoise(min_amplitude=10, max_amplitude=10),
-            RandomNoise(min_amplitude=100, max_amplitude=100),
+            RandomNoise(
+                amplitude_distribution=Uniform(min=10, max=10),
+                f_decay_distribution=Uniform(min=0, max=0),
+            ),
+            RandomNoise(
+                amplitude_distribution=Uniform(min=100, max=100),
+                f_decay_distribution=Uniform(min=0, max=0),
+            ),
         ),
         weights=[0.5, 0.5],
         p=0.5,

@@ -5,10 +5,10 @@ import torch
 from senhance.data.augmentations.background_noise import BackgroundNoise
 from senhance.data.augmentations.chain import Chain
 from senhance.data.augmentations.choose import Choose
+from senhance.data.augmentations.distributions import TruncatedNormal, Uniform
 from senhance.data.augmentations.filters import (
     BandPassChain,
     HighPass,
-    LowPass,
     LowPassResample,
 )
 from senhance.data.augmentations.random_noise import RandomNoise
@@ -30,7 +30,11 @@ def get_default_augmentation(
 
     silence = Silence(p=0.025)
 
-    random_noise = RandomNoise(min_amplitude=0.001, max_amplitude=0.02, p=0.5)
+    random_noise = RandomNoise(
+        amplitude_distribution=Uniform(min=0.001, max=0.02),
+        f_decay_distribution=Uniform(min=-6, max=6),
+        p=0.5,
+    )
 
     background_noises = []
     background_noise_paths = [
@@ -52,8 +56,7 @@ def get_default_augmentation(
         )
         background_noise = BackgroundNoise(
             source,
-            min_snr=5,
-            max_snr=25,
+            snr_distribution=TruncatedNormal(min=5, max=25),
             name=path,
         )
         background_noises.append(background_noise)
@@ -67,13 +70,24 @@ def get_default_augmentation(
     ir_source_paths = ["RoyJames", "EchoThief", "MITMcDermott"]
     for path in ir_source_paths:
         arrow_file = noise_folder / "irs" / path / f"data.{split}.arrow"
-        source = ArrowAudioSource(
-            arrow_file=arrow_file,
-            sequence_length_s=sequence_length_s + 0.1,
-            is_speech=False,
-        )
-        ir = Reverb(source, name=path)
-        irs.append(ir)
+        try:
+            source = ArrowAudioSource(
+                arrow_file=arrow_file,
+                sequence_length_s=sequence_length_s + 0.1,
+                is_speech=False,
+            )
+            # Check if source has valid samples
+            if len(source.indices) > 0:
+                ir = Reverb(source, name=path)
+                irs.append(ir)
+        except Exception as e:
+            # Skip sources that fail to load or have no valid samples
+            print(f"Warning: Skipping IR source {path}: {e}")
+            continue
+
+    if not irs:
+        raise ValueError("No valid IR sources found!")
+
     reverb = Choose(
         *irs,
         name="irs",
@@ -99,24 +113,18 @@ def get_default_augmentation(
     )
     high_pass_freqs_hz = 1 - low_pass_freqs_hz
     low_pass_freqs_hz = (
-        sample_rate // 4
-        + (sample_rate // 2 - sample_rate // 4) * low_pass_freqs_hz
+        sample_rate // 4 + (sample_rate // 2 - sample_rate // 4) * low_pass_freqs_hz
     ).long()
-    low_passes = [
-        LowPassResample(freq_hz=freq_hz) for freq_hz in low_pass_freqs_hz
-    ]
+    low_passes = [LowPassResample(freq_hz=freq_hz) for freq_hz in low_pass_freqs_hz]
     low_pass = Choose(*low_passes, name="low_passes", p=1.0)
 
     high_pass_freqs_hz = (
-        sample_rate // 4
-        + (sample_rate // 2 - sample_rate // 4) * high_pass_freqs_hz
+        sample_rate // 4 + (sample_rate // 2 - sample_rate // 4) * high_pass_freqs_hz
     ).long()
     high_passes = [HighPass(freq_hz=freq_hz) for freq_hz in high_pass_freqs_hz]
     high_pass = Choose(*high_passes, name="high_passes", p=1.0)
 
-    freqs_hz = (
-        torch.linspace(sample_rate // 3, sample_rate // 2, 15).long().tolist()
-    )
+    freqs_hz = torch.linspace(sample_rate // 3, sample_rate // 2, 15).long().tolist()
     bands_hz = [(bef, aft) for bef, aft in zip(freqs_hz[:-1], freqs_hz[1:])]
     band_passes = [BandPassChain(band_hz) for band_hz in bands_hz]
     band_pass = Choose(*band_passes, name="band_passes", p=1.0)
@@ -129,11 +137,11 @@ def get_default_augmentation(
         name="filters",
     )
     specaug = Choose(
-        SpecAugFreq(min_freq_perc_mask=0.1, max_freq_perc_mask=0.35),
-        SpecAugTime(min_time_perc_mask=0.05, max_time_perc_mask=0.15),
+        SpecAugFreq(freq_perc_mask_distribution=Uniform(min=0.1, max=0.35)),
+        SpecAugTime(time_perc_mask_distribution=Uniform(min=0.05, max=0.15)),
         Chain(
-            SpecAugFreq(min_freq_perc_mask=0.1, max_freq_perc_mask=0.35),
-            SpecAugTime(min_time_perc_mask=0.05, max_time_perc_mask=0.15),
+            SpecAugFreq(freq_perc_mask_distribution=Uniform(min=0.1, max=0.35)),
+            SpecAugTime(time_perc_mask_distribution=Uniform(min=0.05, max=0.15)),
         ),
         weights=[0.4, 0.4, 0.2],
     )

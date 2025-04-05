@@ -92,20 +92,53 @@ class Chain(Augmentation):
 
         augmented = waveform[parameters.apply]
         stft, length = None, augmented.shape[-1]
-        for augment_i, params_i in zip(
-            self.augmentations, parameters.params, strict=True
+        original_shape = augmented.shape
+        batch_size, n_channels = augmented.shape[0], augmented.shape[1]
+
+        for i, (augment_i, params_i) in enumerate(
+            zip(self.augmentations, parameters.params, strict=True)
         ):
             if isinstance(augment_i, STFTAugmentation):
                 if stft is None:
-                    stft = Audio.stfter.stft(augmented)
+                    # Flatten batch and channels for STFT: [batch, channels, samples] -> [batch*channels, samples]
+                    augmented_flat = augmented.reshape(batch_size * n_channels, -1)
+                    stft = Audio.stfter.stft(augmented_flat[:, None, :])
                     length = augmented.shape[-1]
+
+                # Expand parameters to match flattened batch*channels dimension
+                if params_i is not None and n_channels > 1:
+                    params_i = self._expand_stft_parameters(params_i, n_channels)
+
                 stft = augment_i.augment(stft, parameters=params_i)
             else:
                 if stft is not None:
-                    augmented = Audio.stfter.istft(stft, length=length)
+                    # Restore original shape after ISTFT
+                    augmented_flat = Audio.stfter.istft(stft, length=length)
+                    augmented = augmented_flat.reshape(batch_size, n_channels, -1)
                     stft = None
                 augmented = augment_i.augment(augmented, parameters=params_i)
         if stft is not None:
-            augmented = Audio.stfter.istft(stft, length=length)
-        waveform[parameters.apply] = augmented
-        return waveform
+            augmented_flat = Audio.stfter.istft(stft, length=length)
+            augmented = augmented_flat.reshape(batch_size, n_channels, -1)
+
+        # Avoid in-place operation to prevent stride issues with multi-stream training
+        result = waveform.clone()
+        result[parameters.apply] = augmented
+        return result
+
+    def _expand_stft_parameters(
+        self, params: BatchAugmentationParameters, n_channels: int
+    ) -> BatchAugmentationParameters:
+        """Expand parameters to handle flattened batch*channels dimension."""
+        # Expand apply mask: [batch] -> [batch*channels]
+        params.apply = params.apply.repeat_interleave(n_channels)
+
+        # Expand each parameter field
+        for field in params.fields:
+            value = getattr(params, field.name)
+            if torch.is_tensor(value) and value.dim() > 0:
+                # Repeat each batch element n_channels times
+                expanded = value.repeat_interleave(n_channels, dim=0)
+                setattr(params, field.name, expanded)
+
+        return params

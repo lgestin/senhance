@@ -45,9 +45,11 @@ class Reverb(Augmentation):
         #     + self.min_drr
         # )
 
-        i = torch.randint(
-            0, len(self.ir_source), size=(1,), generator=generator
-        ).item()
+        i = int(
+            torch.randint(
+                0, len(self.ir_source), size=(1,), generator=generator, device="cpu"
+            ),
+        )
         ir = self.ir_source[i]
         ir_filepath = ir.filepath
         ir = ir.mono().resample(audio.sample_rate)
@@ -79,10 +81,10 @@ class Reverb(Augmentation):
             return waveform
 
         device = waveform.device
-        ir = parameters.ir.to(device, non_blocking=True)
-        apply = parameters.apply.to(device, non_blocking=True)
+        ir = parameters.ir.to(device)
+        apply = parameters.apply.to(device)
 
-        ir = ir / torch.linalg.vector_norm(ir, ord=2)
+        ir = ir / (torch.linalg.vector_norm(ir, ord=2, dim=-1, keepdim=True) + 1e-8)
         reverb = F.fftconvolve(waveform[apply], ir)
         waveform[apply] = reverb[..., : waveform.shape[-1]]
         return waveform

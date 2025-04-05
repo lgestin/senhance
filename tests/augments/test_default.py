@@ -1,27 +1,25 @@
-import pytest
-
-from senhance.data.audio import Audio
+from senhance.data.augmentations.augmentations import Augmentation
 from senhance.data.augmentations.default import get_default_augmentation
 
-from . import AUDIO_TEST_FILES
 from .utils import _test_augment
 
 
-@pytest.mark.parametrize("audio_file_path", AUDIO_TEST_FILES)
-def test_default(audio_file_path):
-    audio = Audio(audio_file_path)
+def set_all_probs_to_one(augmentation: Augmentation):
+    """Recursively set all augmentation probabilities to 1.0."""
+    augmentation.p = 1.0
+    if hasattr(augmentation, "augmentations"):
+        for aug in augmentation.augmentations:
+            set_all_probs_to_one(aug)
+
+
+def test_default(audio_from_file):
     default_augmentation = get_default_augmentation(
         noise_folder="/data/denoising/noise/",
-        sample_rate=audio.sample_rate,
+        sample_rate=audio_from_file.sample_rate,
         split="train",
         sequence_length_s=0.5,
         p=0.5,
     )
-    for aug in default_augmentation:
-        aug.p = 1.0
+    set_all_probs_to_one(default_augmentation)
 
-    _test_augment(augment=default_augmentation, audio=audio)
-
-
-if __name__ == "__main__":
-    test_default(AUDIO_TEST_FILES[0])
+    _test_augment(augment=default_augmentation, audio=audio_from_file)

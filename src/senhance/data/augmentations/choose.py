@@ -17,9 +17,7 @@ class ChooseParameters(AugmentationParameters):
     choice: torch.LongTensor
     params: dict[int, AugmentationParameters]
 
-    def collate(
-        self, parameters: list["ChooseParameters"]
-    ) -> "BatchChooseParameters":
+    def collate(self, parameters: list["ChooseParameters"]) -> "BatchChooseParameters":
         return BatchChooseParameters(parameters)
 
 
@@ -38,7 +36,7 @@ class BatchChooseParameters(BatchAugmentationParameters):
             choice = params.choice.item()
             choices_params[choice].append(params.params)
         choices_params = {
-            choice: params[0].collate(params)
+            choice: params[0].collate(params) if params[0] is not None else None
             for choice, params in choices_params.items()
         }
         self.apply = apply
@@ -85,9 +83,7 @@ class Choose(Augmentation):
             self.weights, torch.rand(tuple(), generator=generator)
         )
         chosen = self.augmentations[choice.item()]
-        chosen_params = chosen.sample_parameters(
-            audio=audio, generator=generator
-        )
+        chosen_params = chosen.sample_parameters(audio=audio, generator=generator)
         return ChooseParameters(choice=choice, params=chosen_params)
 
     def _augment(
@@ -101,9 +97,11 @@ class Choose(Augmentation):
         if parameters is None or (not torch.any(parameters.apply)):
             return waveform
 
-        parameters.choice.to(waveform.device, non_blocking=True)
+        parameters.choice.to(waveform.device)
         augmented = waveform[parameters.apply]
         for choice, params in parameters.params.items():
+            if params is None:
+                continue
             apply = parameters.choice == choice
             augmented[apply] = self.augmentations[choice].augment(
                 augmented[apply], parameters=params

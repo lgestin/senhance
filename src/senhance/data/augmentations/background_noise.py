@@ -4,14 +4,14 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 
-from senhance.data.audio import Audio, AudioInfo
+from senhance.data.audio import Audio
 from senhance.data.augmentations.augmentations import (
     Augmentation,
     AugmentationParameters,
     BatchAugmentationParameters,
 )
+from senhance.data.augmentations.distributions import Distribution
 from senhance.data.source import ArrowAudioSource
-from senhance.data.utils import truncated_normal
 
 
 @dataclass(kw_only=True)
@@ -28,8 +28,7 @@ class BackgroundNoise(Augmentation):
     def __init__(
         self,
         noise_source: ArrowAudioSource,
-        min_snr: float,
-        max_snr: float,
+        snr_distribution: Distribution,
         min_duration_s: float = 0.0,
         name: str = "background_noise",
         p: float = 1.0,
@@ -37,18 +36,18 @@ class BackgroundNoise(Augmentation):
         super().__init__(name=name, p=p)
         self.data_folder = noise_source.arrow_file.parent
         self.noise_source = noise_source
-
-        self.min_snr = min_snr
-        self.max_snr = max_snr
+        self.snr_distribution = snr_distribution
 
     def _sample_parameters(
         self,
         audio: Audio,
         generator: torch.Generator = None,
     ) -> BackgroundNoiseParameters:
-        i = torch.randint(
-            0, len(self.noise_source), size=(1,), generator=generator
-        ).item()
+        i = int(
+            torch.randint(
+                0, len(self.noise_source), size=(1,), generator=generator, device="cpu"
+            )
+        )
         noise = self.noise_source[i]
         noise = noise.random_excerpt(
             duration_s=audio.duration_s,
@@ -59,12 +58,8 @@ class BackgroundNoise(Augmentation):
         if noise.waveform.shape[-1] < audio.waveform.shape[-1]:
             pad = audio.waveform.shape[-1] - noise.waveform.shape[-1]
             noise._waveform = F.pad(noise._waveform, (0, pad))
-        snr = truncated_normal(
-            tuple(),
-            min_val=self.min_snr,
-            max_val=self.max_snr,
-            generator=generator,
-        )
+
+        snr = self.snr_distribution.sample(generator=generator)
         clean_loudness = torch.as_tensor(audio.loudness).to(device=audio.device)
         noise_loudness = torch.as_tensor(noise.loudness).to(device=noise.device)
         noise_loudness = noise_loudness.clamp(min=-43)
@@ -104,11 +99,18 @@ class BackgroundNoise(Augmentation):
 
         # gain = clean_loudness - noise_loudness - snr
         # gain = torch.exp(math.log(10) / 20 * gain)
-        gain = gain.view(-1, 1, 1)  # .clamp(max=3.5)
-        gain = gain.to(device, non_blocking=True)
-        noise = gain * noise
-        # if noise.abs().max() > 1:
-        #     noise /= noise.abs().max()
+        gain = gain.view(-1, 1, 1)
 
-        waveform[apply] = waveform[apply] + noise
-        return waveform
+        # Clamp gain to prevent extreme amplification (max 10x = 20dB boost)
+        gain = gain.clamp(max=10.0)
+
+        gain = gain.to(device)
+        noise = gain * noise
+
+        # Clamp final noise to prevent extreme values
+        noise = noise.clamp(-10.0, 10.0)
+
+        # Avoid in-place operation for multi-stream training
+        result = waveform.clone()
+        result[apply] = waveform[apply] + noise
+        return result

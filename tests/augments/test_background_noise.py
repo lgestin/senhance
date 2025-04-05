@@ -2,6 +2,7 @@ import pytest
 
 from senhance.data.audio import Audio
 from senhance.data.augmentations.background_noise import BackgroundNoise
+from senhance.data.augmentations.distributions import TruncatedNormal
 from senhance.data.source import ArrowAudioSource
 
 from . import AUDIO_TEST_FILES
@@ -16,8 +17,7 @@ def test_background_noise(audio_file_path):
     )
     augment = BackgroundNoise(
         noise_source=noise_source,
-        min_snr=-15.0,
-        max_snr=-5.0,
+        snr_distribution=TruncatedNormal(min=-15.0, max=-5.0),
         p=0.5,
     )
 

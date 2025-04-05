@@ -2,6 +2,7 @@ import pytest
 
 from senhance.data.audio import Audio
 from senhance.data.augmentations.clipping import Clipping
+from senhance.data.augmentations.distributions import Uniform
 
 from . import AUDIO_TEST_FILES
 from .utils import _test_augment
@@ -11,8 +12,7 @@ from .utils import _test_augment
 def test_clipping(audio_file_path):
     audio = Audio(audio_file_path)
     augment = Clipping(
-        min_clip_percentile=0,
-        max_clip_percentile=0.1,
+        clip_percentile_distribution=Uniform(min=0.0, max=0.1),
         p=0.5,
     )
 

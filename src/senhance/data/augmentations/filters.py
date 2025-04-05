@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+import julius
 import torch
 import torchaudio.functional as F
 
@@ -50,15 +51,13 @@ class Filter(Augmentation):
             return waveform
 
         device = waveform.device
-        sample_rate = parameters.sample_rate.unique().to(
-            device, non_blocking=True
-        )
+        sample_rate = parameters.sample_rate.unique().to(device)
 
         apply = parameters.apply
         waveform[apply] = self.filter_waveform(
             waveform=waveform[apply],
             sample_rate=sample_rate,
-            freq_hz=self.freq_hz,
+            # freq_hz=self.freq_hz,
         )
         return waveform
 
@@ -71,13 +70,9 @@ class LowPass(Filter):
         self,
         waveform: torch.Tensor,
         sample_rate: int,
-        freq_hz: float,
     ) -> torch.Tensor:
-        waveform = F.lowpass_biquad(
-            waveform=waveform,
-            sample_rate=sample_rate,
-            cutoff_freq=freq_hz,
-        )
+        assert self.freq_hz < sample_rate / 2
+        waveform = julius.lowpass_filter(waveform, cutoff=self.freq_hz)
         return waveform
 
 
@@ -95,8 +90,8 @@ class LowPassResample(Filter):
         self,
         waveform: torch.Tensor,
         sample_rate: int,
-        freq_hz: float,
     ) -> torch.Tensor:
+        assert self.freq_hz < sample_rate / 2
         s = waveform.shape[-1]
         waveform = F.resample(
             waveform=waveform,
@@ -124,13 +119,9 @@ class HighPass(Filter):
         self,
         waveform: torch.Tensor,
         sample_rate: int,
-        freq_hz: float,
     ) -> torch.Tensor:
-        waveform = F.highpass_biquad(
-            waveform=waveform,
-            sample_rate=sample_rate,
-            cutoff_freq=freq_hz,
-        )
+        assert self.freq_hz < sample_rate / 2
+        waveform = julius.highpass_filter(waveform, self.freq_hz)
         return waveform
 
 
@@ -148,13 +139,11 @@ class BandPass(Filter):
         self,
         waveform: torch.Tensor,
         sample_rate: int,
-        freq_hz: tuple[float],
     ) -> torch.Tensor:
-        freq_hz = 0.5 * (freq_hz[1] - freq_hz[0])
-        waveform = F.bandpass_biquad(
-            waveform=waveform,
-            sample_rate=sample_rate,
-            central_freq=freq_hz,
+        waveform = julius.bandpass_filter(
+            waveform,
+            cutoff_low=self.bands_hz[0],
+            cutoff_high=self.bands_hz[1],
         )
         return waveform
 
@@ -166,6 +155,8 @@ class BandPassChain(Chain):
         name: str = "band_pass",
         p: float = 1.0,
     ):
-        low_pass = LowPass(band_hz[0], p=1.0)
-        high_pass = HighPass(band_hz[1], p=1.0)
-        super().__init__(low_pass, high_pass, name=name, p=p)
+        # High pass removes frequencies BELOW band_hz[0] (the low cutoff)
+        # Low pass removes frequencies ABOVE band_hz[1] (the high cutoff)
+        high_pass = HighPass(band_hz[0], p=1.0)
+        low_pass = LowPass(band_hz[1], p=1.0)
+        super().__init__(high_pass, low_pass, name=name, p=p)

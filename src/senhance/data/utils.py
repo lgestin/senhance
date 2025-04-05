@@ -23,7 +23,7 @@ def load_waveform(
         waveform = np.transpose(waveform)
     if sample_rate:
         waveform = resample(waveform, orig_sr=sr, targ_sr=sample_rate)
-    return waveform, sr
+    return waveform, int(sr)
 
 
 def av_resampler_layout_from_waveform(waveform: np.ndarray):
@@ -51,9 +51,7 @@ def resample(waveform: np.ndarray, orig_sr: int, targ_sr: int):
     frame.rate = orig_sr
     frame = resampler.resample(frame)
     flush = resampler.resample(None)
-    resampled = np.concat(
-        [frame[0].to_ndarray(), flush[0].to_ndarray()], axis=-1
-    )
+    resampled = np.concat([frame[0].to_ndarray(), flush[0].to_ndarray()], axis=-1)
     return resampled
 
 

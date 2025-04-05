@@ -4,7 +4,6 @@ from pathlib import Path
 
 import soundfile as sf
 import torch
-import torchaudio.functional as F
 
 from senhance.data.stft import STFT
 from senhance.data.utils import load_waveform, resample
@@ -45,7 +44,7 @@ class Audio:
         self._stft = None
 
     def to(self, device: str | torch.device):
-        self.waveform.to(device, non_blocking=True)
+        self.waveform.to(device)
         return self
 
     @property
@@ -109,7 +108,9 @@ class Audio:
         loudness = self._loudness
         if loudness is None:
             waveform = self.waveform
-            loudness = F.loudness(waveform, sample_rate=self.sample_rate).item()
+            # Compute RMS loudness in dB: 20 * log10(rms)
+            rms = torch.sqrt(torch.mean(waveform**2, dim=-1))
+            loudness = (20.0 * torch.log10(rms)).mean().item()
         if math.isnan(loudness):
             loudness = -70.0
         self._loudness = loudness

@@ -1,9 +1,12 @@
 from dataclasses import dataclass, fields
+from pathlib import Path
 
 import numpy as np
 import torch
 
 from senhance.data.audio import Audio
+from senhance.data.augmentations.config import load_augmentation_from_yaml
+from senhance.data.augmentations.distributions import Binomial
 
 
 @dataclass
@@ -26,12 +29,9 @@ class BatchAugmentationParameters:
         self.collate_fields()
 
     def _validate_parameters(self):
-        params_type = type(
-            next(filter(lambda p: p is not None, self._parameters))
-        )
+        params_type = type(next(filter(lambda p: p is not None, self._parameters)))
         are_all_params_same = all(
-            isinstance(param, (params_type, type(None)))
-            for param in self._parameters
+            isinstance(param, (params_type, type(None))) for param in self._parameters
         )
         assert are_all_params_same, "All parameters must be of the same type"
 
@@ -71,24 +71,20 @@ class BatchAugmentationParameters:
         elif torch.is_tensor(idx):
             assert idx.ndim == 1
             parameters = [
-                param
-                for param, apply in zip(self._parameters, idx)
-                if apply.item()
+                param for param, apply in zip(self._parameters, idx) if apply.item()
             ]
             item = self.__class__(parameters=parameters)
         return item
 
     def to(self, device: str | torch.device, non_blocking: bool = False):
-        parameters = next(
-            filter(lambda p: p is not None, self._parameters), None
-        )
+        parameters = next(filter(lambda p: p is not None, self._parameters), None)
         if parameters is None:
             return self
 
         for field in fields(parameters):
             value = getattr(self, field.name)
             if torch.is_tensor(value):
-                value.to(device, non_blocking=non_blocking)
+                setattr(self, field.name, value.to(device, non_blocking=non_blocking))
             elif isinstance(value, BatchAugmentationParameters):
                 value.to(device, non_blocking=non_blocking)
             elif isinstance(value, list):
@@ -101,35 +97,68 @@ class BatchAugmentationParameters:
                         val.to(device, non_blocking=non_blocking)
         return self
 
+    def pin_memory(self):
+        """Pin memory for all tensor fields for faster GPU transfer."""
+        parameters = next(filter(lambda p: p is not None, self._parameters), None)
+        if parameters is None:
+            return self
+
+        for field in fields(parameters):
+            value = getattr(self, field.name)
+            if torch.is_tensor(value):
+                setattr(self, field.name, value.pin_memory())
+            elif isinstance(value, BatchAugmentationParameters):
+                value.pin_memory()
+            elif isinstance(value, list):
+                if len(value) > 0 and isinstance(value[0], BatchAugmentationParameters):
+                    for val in value:
+                        val.pin_memory()
+            elif isinstance(value, dict):
+                for val in value.values():
+                    if isinstance(val, BatchAugmentationParameters):
+                        val.pin_memory()
+        return self
+
     @property
     def size(self):
         return len(self._parameters)
 
 
 class Augmentation:
-    def __init__(self, name: str = None, p: float = 1.0):
+    def __init__(self, name: str | None = None, p: float = 1.0):
         super().__init__()
         assert 0 <= p <= 1.0
-        self.p = p
+        self.prob = Binomial(count=1, prob=p)
 
         if name is None:
             name = self.__class__.__name__
         self.name = name
 
+    @property
+    def p(self) -> float:
+        """Get the augmentation probability."""
+        return self.prob.prob
+
+    @p.setter
+    def p(self, value: float):
+        """Set the augmentation probability."""
+        assert 0 <= value <= 1.0, f"Probability must be in [0, 1], got {value}"
+        self.prob.prob = value
+
     def sample_parameters(
         self,
         audio: Audio,
-        generator: torch.Generator = None,
+        generator: torch.Generator | None = None,
     ) -> AugmentationParameters | None:
         params = None
-        if apply := (torch.rand(tuple(), generator=generator) <= self.p):
+        if self.prob.sample():
             params = self._sample_parameters(audio=audio, generator=generator)
         return params
 
     def _sample_parameters(
         self,
         audio: Audio,
-        generator: torch.Generator = None,
+        generator: torch.Generator | None = None,
     ) -> AugmentationParameters:
         """
         anything not related to torch.Tensor
@@ -154,10 +183,19 @@ class Augmentation:
         """
         raise NotImplementedError
 
-    def __call__(self, audio: Audio, generator: torch.Generator = None):
+    def __call__(self, audio: Audio, generator: torch.Generator | None = None):
         parameters = self.sample_parameters(audio=audio, generator=generator)
         augmented = self.augment(audio.waveform, parameters=parameters)
         return augmented
+
+    @classmethod
+    def from_yaml(
+        cls, path: Path | str, sequence_length_s: float, split: str = "train"
+    ) -> "Augmentation":
+        augmentation = load_augmentation_from_yaml(
+            config_path=path, sequence_length_s=sequence_length_s, split=split
+        )
+        return augmentation
 
 
 class STFTAugmentation(Augmentation):
@@ -178,7 +216,7 @@ class STFTAugmentation(Augmentation):
         """
         raise NotImplementedError
 
-    def __call__(self, audio: Audio, generator: torch.Generator = None):
+    def __call__(self, audio: Audio, generator: torch.Generator | None = None):
         parameters = self.sample_parameters(audio=audio, generator=generator)
         stft = Audio.stfter.stft(audio.waveform)
         length = audio.waveform.shape[-1]
@@ -191,7 +229,7 @@ class Identity(Augmentation):
     def sample_parameters(
         self,
         audio: Audio,
-        generator: torch.Generator = None,
+        generator: torch.Generator | None = None,
     ) -> AugmentationParameters:
         apply = torch.rand(tuple(), generator=generator) <= self.p
         return AugmentationParameters(apply=apply)

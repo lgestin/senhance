@@ -8,6 +8,7 @@ from senhance.data.augmentations.augmentations import (
     BatchAugmentationParameters,
     STFTAugmentation,
 )
+from senhance.data.augmentations.distributions import Distribution
 
 
 @dataclass(kw_only=True)
@@ -19,16 +20,14 @@ class SpecAugParameters(AugmentationParameters):
 class SpecAugDim(STFTAugmentation):
     def __init__(
         self,
-        min_perc_mask: float,
-        max_perc_mask: float,
+        perc_mask_distribution: Distribution,
         dim: int,
         name: str = "specaugdim",
         p: float = 1.0,
     ):
         super().__init__(name=name, p=p)
 
-        self.min_perc_mask = min_perc_mask
-        self.max_perc_mask = max_perc_mask
+        self.perc_mask_distribution = perc_mask_distribution
         self.dim = dim
         self.other_dim = 1 + dim % 2
 
@@ -37,11 +36,7 @@ class SpecAugDim(STFTAugmentation):
         audio: Audio,
         generator: torch.Generator = None,
     ) -> SpecAugParameters:
-        perc_mask = torch.rand(tuple(), generator=generator)
-        perc_mask = (
-            perc_mask * (self.max_perc_mask - self.min_perc_mask)
-            + self.min_perc_mask
-        )
+        perc_mask = self.perc_mask_distribution.sample(generator=generator)
         start = torch.rand(tuple(), generator=generator)
         start *= 1 - perc_mask
         return SpecAugParameters(start=start, perc_mask=perc_mask)
@@ -62,8 +57,8 @@ class SpecAugDim(STFTAugmentation):
 
         device = stft.device
         n = stft.shape[self.dim]
-        start = parameters.start.to(device, non_blocking=True)
-        perc = parameters.perc_mask.to(device, non_blocking=True)
+        start = parameters.start.to(device)
+        perc = parameters.perc_mask.to(device)
         arange = torch.arange(n, device=device)[None].unsqueeze(self.other_dim)
         perc = (n * perc).long()[:, None, None]
         start = (n * start).long()[:, None, None]
@@ -72,23 +67,19 @@ class SpecAugDim(STFTAugmentation):
         repeats = [1, 1, 1]
         repeats[self.other_dim] = stft.shape[self.other_dim]
         mask = mask.repeat(repeats)
-        stft[apply] = torch.where(
-            mask, torch.zeros_like(stft[apply]), stft[apply]
-        )
+        stft[apply] = torch.where(mask, torch.zeros_like(stft[apply]), stft[apply])
         return stft
 
 
 class SpecAugFreq(SpecAugDim):
     def __init__(
         self,
-        min_freq_perc_mask: float,
-        max_freq_perc_mask: float,
+        freq_perc_mask_distribution: Distribution,
         name: str = "specaug_freq",
         p: float = 1.0,
     ):
         super().__init__(
-            min_perc_mask=min_freq_perc_mask,
-            max_perc_mask=max_freq_perc_mask,
+            perc_mask_distribution=freq_perc_mask_distribution,
             dim=1,
             name=name,
             p=p,
@@ -98,14 +89,12 @@ class SpecAugFreq(SpecAugDim):
 class SpecAugTime(SpecAugDim):
     def __init__(
         self,
-        min_time_perc_mask: float,
-        max_time_perc_mask: float,
+        time_perc_mask_distribution: Distribution,
         name: str = "specaug_time",
         p: float = 1.0,
     ):
         super().__init__(
-            min_perc_mask=min_time_perc_mask,
-            max_perc_mask=max_time_perc_mask,
+            perc_mask_distribution=time_perc_mask_distribution,
             dim=2,
             name=name,
             p=p,

@@ -26,19 +26,29 @@ class Batch:
     waveforms: torch.FloatTensor
     augmentation_params: BatchAugmentationParameters
 
-    def to(self, device: str | torch.device):
+    def to(self, device: str | torch.device, non_blocking: bool = False):
         for field in fields(self):
             value = getattr(self, field.name)
-            if torch.is_tensor(value) or isinstance(
-                value, BatchAugmentationParameters
-            ):
-                value = value.to(device, non_blocking=True)
+            if torch.is_tensor(value) or isinstance(value, BatchAugmentationParameters):
+                value = value.to(device, non_blocking=non_blocking)
                 setattr(self, field.name, value)
         return self
 
     def pin_memory(self):
         self.waveforms = self.waveforms.pin_memory()
         return self
+
+
+@dataclass
+class FlowMatchingBatch:
+    timestep: torch.Tensor
+    x_0: torch.Tensor
+    x_1: torch.Tensor
+
+    def record_stream(self, stream: torch.cuda.Stream):
+        self.timestep.record_stream(stream)
+        self.x_0.record_stream(stream)
+        self.x_1.record_stream(stream)
 
 
 class AudioDataset(Dataset):

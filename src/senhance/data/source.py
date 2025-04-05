@@ -24,10 +24,12 @@ class IndexAudioSource:
         indices = range(len(self.index))
         if sequence_length_s:
             durations_s = [item["duration_s"] for item in index]
-            indices = filter(
-                lambda i: durations_s[i] >= sequence_length_s, indices
-            )
+            indices = filter(lambda i: durations_s[i] >= sequence_length_s, indices)
         self.indices = list(indices)
+        if len(self.indices) == 0:
+            raise ValueError(
+                f"No valid samples in {self.index_file} with sequence_length_s={self.sequence_length_s}"
+            )
 
     def __len__(self):
         return 10_000_000  # approx inifinite length
@@ -59,15 +61,22 @@ class ArrowAudioSource:
         self.arrow_file = arrow_file
         self.sequence_length_s = sequence_length_s
 
-        with pa.memory_map(arrow_file.as_posix(), "rb") as arrow:
-            source = pa.ipc.open_file(arrow).read_all()
-        self.source = source
+        self.memory_map = pa.memory_map(arrow_file.as_posix(), "rb")
+        self.source = pa.ipc.open_file(self.memory_map)
+        self.num_chunks = self.source.num_record_batches
+        self.chunk_size = 128
 
-        indices = np.arange(self.source.num_rows)
-        if sequence_length_s:
-            durations_s = source["duration_s"].to_numpy()
-            indices = indices[durations_s >= sequence_length_s]
-        self.indices = indices.tolist()
+        valid_indices = []
+        for chunk_id in range(self.num_chunks):
+            chunk = self.source.get_record_batch(chunk_id)
+            local_indices = np.arange(chunk.num_rows, dtype=np.int32)
+            if sequence_length_s:
+                duration_s = chunk["duration_s"].to_numpy()
+                local_indices = local_indices[duration_s >= sequence_length_s + 1e-2]
+            # Convert local indices to global indices
+            global_indices = local_indices + (chunk_id * self.chunk_size)
+            valid_indices.extend(global_indices.tolist())
+        self.indices = valid_indices
         self.is_speech = is_speech
 
     def __len__(self):
@@ -75,14 +84,22 @@ class ArrowAudioSource:
 
     def __getitem__(self, idx: int) -> Audio:
         source_idx = self.indices[idx % len(self.indices)]
-        item = self.source.slice(source_idx, 1)
-        filepath = item["filepath"].to_pylist()[0]
-        filepath = (self.arrow_file.parent / filepath).as_posix()
-        waveform = item["waveform"].to_numpy()[0]
-        waveform = torch.from_numpy(waveform)[None].float() / 32768.0
-        sample_rate = int(item["sample_rate"].to_pylist()[0])
-        loudness = float(item["loudness"].to_pylist()[0])
+        chunk_id = source_idx // self.chunk_size
+        row = source_idx % self.chunk_size
 
+        chunk = self.source.get_record_batch(chunk_id)
+        filepath = chunk["filepath"][row].as_py()
+        filepath = (self.arrow_file.parent / filepath).as_posix()
+        waveform_bytes = chunk["waveform_i16"][row].as_buffer()
+        count = chunk["num_samples"][row].as_py()
+        sample_rate = chunk["sample_rate"][row].as_py()
+        loudness = chunk["loudness"][row].as_py()
+        waveform = (
+            torch.frombuffer(memoryview(waveform_bytes), dtype=torch.int16, count=count)
+            .view(1, -1)
+            .to(dtype=torch.float)
+            .div_(32768)
+        )
         audio = Audio(
             filepath=filepath,
             waveform=waveform,
@@ -101,6 +118,15 @@ class ArrowAudioSource:
                     duration_s=self.sequence_length_s,
                     generator=generator,
                 )
+
+        # Load encoded latents if available
+        encoded = None
+        if "codec_shape" in chunk.schema.names:
+            codec_shape = chunk["codec_shape"][row].as_py()
+            codec_bytes = chunk["codec_bytes"][row].as_buffer()
+            encoded = torch.frombuffer(memoryview(codec_bytes), dtype=torch.float16)
+            encoded = encoded.view(*codec_shape)
+
         return audio
 
 
