@@ -1,2 +1,4 @@
 .devcontainer/
 **/*.pyc
+**/target/
+**/Cargo.lock

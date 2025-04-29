@@ -1,0 +1,22 @@
+[package]
+name = "rust_ext"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rust_ext"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "*", features = ["extension-module"] }
+log = "*"
+rustfft = "*"
+num-traits = "0.2"
+numpy = "0.23"
+ndarray = "0.16.1"
+rand = "*"
+rand_distr = "*"
+rand_core = "*"
+rubato = "0.16.1"
+biquad = "0.5.0"
+hound = "*"
