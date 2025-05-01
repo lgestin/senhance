@@ -6,12 +6,14 @@ use numpy::{PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 
 #[pyclass]
+#[derive(Clone)]
 pub struct ClippingParameters {
     #[pyo3(get)]
     clip_percentile: f32,
 }
 
 #[pyclass]
+#[derive(Debug)]
 pub struct Clipping {
     quantile_distribution: Box<dyn Samplable<f32>>,
     #[pyo3(get)]
@@ -103,6 +105,14 @@ impl Clipping {
             p,
         })
     }
+    // #[new]
+    // #[pyo3(signature = (quantile_distribution, p=1.0))]
+    // fn pynew(quantile_distribution: &Box<dyn Samplable<f32>>, p: f32) -> PyResult<Self> {
+    //     Ok(Clipping {
+    //         quantile_distribution,
+    //         p,
+    //     })
+    // }
     #[pyo3(signature = (audio, rng=None))]
     fn sample_parameters(
         &self,
@@ -111,7 +121,9 @@ impl Clipping {
     ) -> ClippingParameters {
         RandomAugmentation::sample_parameters(self, audio, rng)
     }
-    fn augment<'py>(
+
+    #[pyo3(name = "augment")]
+    fn augment_py<'py>(
         &'py self,
         py: Python<'py>,
         waveform: PyReadonlyArray2<f32>,
@@ -120,5 +132,66 @@ impl Clipping {
         let augmented =
             RandomAugmentation::augment(self, &waveform.as_array().to_owned(), parameters);
         PyArray2::from_array(py, &augmented).to_owned().into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    fn create_random_audio(n_samples: usize, sr: usize) -> Audio {
+        let mut rng = rand::rng();
+        let rand_waveform = Array2::from_shape_fn((1_usize, n_samples as usize), |_| rng.random());
+        Audio {
+            waveform: rand_waveform,
+            sample_rate: sr,
+        }
+    }
+
+    #[test]
+    fn test_clip() {
+        const SR: usize = 16_000;
+        let random_audio = create_random_audio(3 * SR, SR);
+        let clipped = clip(&random_audio.waveform, 0.8);
+        let max_random = random_audio
+            .waveform
+            .fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
+        let max_clipped = clipped.fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
+        assert_ne!(max_random, max_clipped)
+    }
+
+    #[test]
+    fn test_clipping() {
+        const SR: usize = 16_000;
+        let random_audio = create_random_audio(3 * SR, SR);
+        let quantile_distribution = Box::new(Uniform::new(0.8, 0.9));
+        let clipping = Clipping::new(quantile_distribution, 1.0);
+
+        let mut rng = RandomNumberGenerator::new(Some(0));
+        let parameters = clipping.sample_parameters(&random_audio, Some(&mut rng));
+        let clipped = clipping.augment(&random_audio.waveform, &parameters);
+        let max_random = random_audio
+            .waveform
+            .fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
+        let max_clipped = clipped.fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
+        assert_ne!(max_random, max_clipped)
+    }
+
+    #[test]
+    fn test_noclipping() {
+        const SR: usize = 16_000;
+        let random_audio = create_random_audio(3 * SR, SR);
+        let quantile_distribution = Box::new(Uniform::new(0.8, 0.9));
+        let clipping = Clipping::new(quantile_distribution, 0.0);
+
+        let mut rng = RandomNumberGenerator::new(Some(0));
+        let parameters = clipping.maybe_sample_parameters(&random_audio, Some(&mut rng));
+        let clipped = clipping.maybe_augment(&random_audio.waveform, parameters.as_ref());
+        let max_random = random_audio
+            .waveform
+            .fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
+        let max_clipped = clipped.fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
+        assert_eq!(max_random, max_clipped)
     }
 }

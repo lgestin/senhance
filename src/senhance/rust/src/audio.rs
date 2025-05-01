@@ -1,17 +1,10 @@
-use hound;
+// use hound;
 use ndarray::s;
 use ndarray::{Array1, Array2};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
-use std::path::PathBuf;
 
 use crate::resample::resample;
-
-pub struct AudioFile {
-    filepath: PathBuf,
-    start_s: Option<f32>,
-    end_s: Option<f32>,
-}
 
 #[pyclass]
 #[derive(Clone)]

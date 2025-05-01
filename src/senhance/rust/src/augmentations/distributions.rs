@@ -2,15 +2,17 @@ use pyo3::prelude::*;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use rand_distr::StandardNormal;
+use std::fmt::Debug;
 
 #[pyclass]
 pub struct RandomNumberGenerator {
     rng: StdRng,
 }
 
-//#[pymethods]
+#[pymethods]
 impl RandomNumberGenerator {
-    //#[new]
+    #[new]
+    #[pyo3(signature = (seed=None))]
     pub fn new(seed: Option<u64>) -> Self {
         let rng: StdRng;
         if let Some(seed) = seed {
@@ -20,7 +22,8 @@ impl RandomNumberGenerator {
         }
         RandomNumberGenerator { rng }
     }
-    pub fn random(&mut self) -> f32 {
+
+    pub fn rand(&mut self) -> f32 {
         self.rng.random::<f32>()
     }
 
@@ -28,15 +31,15 @@ impl RandomNumberGenerator {
         self.rng.sample::<f32, _>(StandardNormal)
     }
 
-    pub fn categorical(&mut self, n: usize) -> usize {
-        self.rng.random_range(0..n)
+    pub fn randint(&mut self, min: usize, max: usize) -> usize {
+        self.rng.random_range(min..max)
     }
 
     pub fn weighted_categorical(&mut self, weights: Vec<f32>) -> usize {
         let weights_sum: f32 = weights.iter().sum();
         let normalized_weights: Vec<f32> = weights.iter().map(|&w| w / weights_sum).collect();
 
-        let rand = self.random();
+        let rand = self.rand();
 
         let mut cumsum: Vec<f32> = Vec::with_capacity(normalized_weights.len());
         let mut running_sum = 0.0;
@@ -55,7 +58,7 @@ impl RandomNumberGenerator {
     }
 }
 
-pub trait Samplable<T>: Send + Sync {
+pub trait Samplable<T>: Send + Sync + Debug {
     fn sample(&self, rng: Option<&mut RandomNumberGenerator>) -> T;
     fn clone_box(&self) -> Box<dyn Samplable<T>>;
 }
@@ -77,11 +80,17 @@ pub struct Uniform {
     pub max: f32,
 }
 
+impl Uniform {
+    pub fn new(min: f32, max: f32) -> Self {
+        Uniform { min, max }
+    }
+}
+
 impl Samplable<f32> for Uniform {
     fn sample(&self, rng: Option<&mut RandomNumberGenerator>) -> f32 {
         let mut sampled: f32;
         if let Some(rng) = rng {
-            sampled = rng.random();
+            sampled = rng.rand();
         } else {
             let mut rng = rand::rng();
             sampled = rng.random::<f32>();
@@ -97,7 +106,7 @@ impl Samplable<f32> for Uniform {
 #[pymethods]
 impl Uniform {
     #[new]
-    fn new(min: f32, max: f32) -> Self {
+    fn pynew(min: f32, max: f32) -> Self {
         Uniform { min, max }
     }
     #[pyo3(signature=(rng=None))]
@@ -114,12 +123,12 @@ pub struct Categorical {
 
 impl Samplable<usize> for Categorical {
     fn sample(&self, rng: Option<&mut RandomNumberGenerator>) -> usize {
-        if let Some(rng) = rng {
-            rng.categorical(self.n_categories)
+        let rng = if let Some(rng) = rng {
+            rng
         } else {
-            let mut rng = rand::rng();
-            rng.random_range(0..self.n_categories)
-        }
+            &mut RandomNumberGenerator::new(None)
+        };
+        rng.randint(0, self.n_categories)
     }
     fn clone_box(&self) -> Box<dyn Samplable<usize>> {
         Box::new(self.clone())

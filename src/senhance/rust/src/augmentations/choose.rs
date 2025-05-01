@@ -1,23 +1,25 @@
 use crate::audio::Audio;
-use crate::augmentations::augmentation::{AnyAugmentation, RandomAugmentation};
+use crate::augmentations::augmentation::{AnyAugmentation, AnyParameters, RandomAugmentation};
 use crate::augmentations::distributions::{RandomNumberGenerator, Samplable, WeightedCategorical};
 use ndarray::Array2;
 use numpy::{PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
-use std::any::Any;
 
+use super::chain::Chain;
 use super::clipping::Clipping;
+use super::random_noise::RandomNoise;
 
 #[pyclass]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChooseParameters {
     #[pyo3(get)]
     choice: usize,
-    choice_parameters: Box<dyn Any + Send + Sync>,
+    choice_parameters: AnyParameters,
 }
 
 #[pyclass]
+#[derive(Debug, Clone)]
 pub struct Choose {
     augmentations: Vec<Box<dyn AnyAugmentation>>,
     #[pyo3(get)]
@@ -57,22 +59,26 @@ impl RandomAugmentation for Choose {
     fn p(&self) -> f32 {
         self.p
     }
+
     fn sample_parameters(
         &self,
         audio: &Audio,
         mut rng: Option<&mut RandomNumberGenerator>,
     ) -> ChooseParameters {
         let choice = self.choice_distribution.sample(rng.as_deref_mut());
-        let choice_parameters = self.augmentations[choice].sample_parameters_any(audio, rng);
+        let augmentation = &self.augmentations[choice];
+        println!("{:?}", augmentation.name_any());
+        let choice_parameters = augmentation.sample_parameters_any(audio, rng);
         ChooseParameters {
             choice,
-            choice_parameters: Box::new(choice_parameters),
+            choice_parameters: choice_parameters,
         }
     }
+
     fn augment(&self, waveform: &Array2<f32>, parameters: &ChooseParameters) -> Array2<f32> {
         let augmentation = &self.augmentations[parameters.choice];
         augmentation
-            .augment_any(waveform, parameters.choice_parameters.as_ref())
+            .augment_any(waveform, &parameters.choice_parameters)
             .expect("Augmentation Error")
     }
 }
@@ -86,32 +92,41 @@ impl Choose {
         choice_distribution: Option<WeightedCategorical>,
         p: f32,
     ) -> PyResult<Self> {
-        let mut aug: Vec<Box<dyn AnyAugmentation>> = Vec::with_capacity(augmentations.len());
-        for item in augmentations.iter() {
-            println!("{:?}", item);
-            if let Ok(augmentation) = item.extract::<Clipping>() {
-                aug.push(Box::new(augmentation));
+        let mut rust_augmentations: Vec<Box<dyn AnyAugmentation>> =
+            Vec::with_capacity(augmentations.len());
+        for augmentation in augmentations.iter() {
+            println!("{:?}", augmentation);
+            if let Ok(rust_augmentation) = augmentation.extract::<Choose>() {
+                rust_augmentations.push(Box::new(rust_augmentation));
+            } else if let Ok(rust_augmentation) = augmentation.extract::<Chain>() {
+                rust_augmentations.push(Box::new(rust_augmentation));
+            } else if let Ok(rust_augmentation) = augmentation.extract::<Clipping>() {
+                rust_augmentations.push(Box::new(rust_augmentation));
+            } else if let Ok(rust_augmentation) = augmentation.extract::<RandomNoise>() {
+                rust_augmentations.push(Box::new(rust_augmentation));
             }
         }
-        Ok(Choose::new(aug, choice_distribution, p))
+        Ok(Choose::new(rust_augmentations, choice_distribution, p))
     }
-    #[pyo3(signature = (audio, rng=None))]
-    fn sample_parameters(
+
+    #[pyo3(name="sample_parameters", signature = (audio, rng=None))]
+    fn py_sample_parameters(
         &self,
         audio: &Audio,
         rng: Option<&mut RandomNumberGenerator>,
     ) -> ChooseParameters {
-        RandomAugmentation::sample_parameters(self, audio, rng)
+        self.sample_parameters(audio, rng)
     }
-    fn augment<'py>(
+
+    #[pyo3(name = "augment")]
+    fn py_augment<'py>(
         &'py self,
         py: Python<'py>,
         waveform: PyReadonlyArray2<f32>,
         parameters: &ChooseParameters,
     ) -> Py<PyArray2<f32>> {
-        println!("{:?}", parameters);
-        let augmented =
-            RandomAugmentation::augment(self, &waveform.as_array().to_owned(), parameters);
+        println!("choose params {:?}", parameters);
+        let augmented = self.augment(&waveform.as_array().to_owned(), parameters);
         PyArray2::from_array(py, &augmented).to_owned().into()
     }
 }

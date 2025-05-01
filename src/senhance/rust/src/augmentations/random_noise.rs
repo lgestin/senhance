@@ -2,11 +2,12 @@ use crate::audio::Audio;
 use crate::augmentations::augmentation::RandomAugmentation;
 use crate::augmentations::distributions::{RandomNumberGenerator, Samplable, Uniform};
 use ndarray::{Array, Array2};
-use numpy::{Ix2, PyArray2, PyReadonlyArray2};
+use numpy::{PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 
 #[pyclass]
+#[derive(Clone)]
 pub struct RandomNoiseParameters {
     noise: Audio,
     #[pyo3(get)]
@@ -16,6 +17,7 @@ pub struct RandomNoiseParameters {
 }
 
 #[pyclass]
+#[derive(Debug)]
 pub struct RandomNoise {
     amplitude_distribution: Box<dyn Samplable<f32>>,
     beta_distribution: Box<dyn Samplable<f32>>,
