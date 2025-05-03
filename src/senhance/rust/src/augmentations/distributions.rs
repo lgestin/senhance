@@ -73,7 +73,7 @@ pub trait Samplable<T>: Send + Sync + Debug {
 //    }
 //}
 
-#[pyclass(str = "uniform(min={min}, max={max})")]
+#[pyclass(str = "Uniform(min={min}, max={max})")]
 #[derive(Clone, Debug)]
 pub struct Uniform {
     pub min: f32,
@@ -92,8 +92,8 @@ impl Samplable<f32> for Uniform {
         if let Some(rng) = rng {
             sampled = rng.rand();
         } else {
-            let mut rng = rand::rng();
-            sampled = rng.random::<f32>();
+            let mut rng = RandomNumberGenerator::new(None);
+            sampled = rng.rand();
         }
         sampled = self.min + sampled * (self.max - self.min);
         sampled
@@ -115,7 +115,7 @@ impl Uniform {
     }
 }
 
-#[pyclass(str = "categorical(n_categories={n_categories})")]
+#[pyclass(str = "Categorical(n_categories={n_categories})")]
 #[derive(Clone, Debug)]
 pub struct Categorical {
     n_categories: usize,
@@ -185,22 +185,46 @@ impl WeightedCategorical {
     }
 }
 
-// pub struct Gaussian {
-//     distribution: Box<Normal>,
-// }
+#[pyclass(str = "Normal(mean={mean}, std={std})")]
+#[derive(Clone, Debug)]
+pub struct Normal {
+    mean: f32,
+    std: f32,
+}
 
-// impl Gaussian {
-//     fn new(&self, mean: f32, std: f32) -> Self {
-//         let distribution = Normal::new(mean, std).unwrap();
-//         Gaussian { distribution }
-//     }
-// }
+impl Normal {
+    fn new(&self, mean: f32, std: f32) -> Self {
+        Normal { mean, std }
+    }
+}
 
-// impl Samplable for Gaussian {
-//     fn sample(&self, rng: &mut StdRng) -> f32 {
-//         self.distribution.sample(rng)
-//     }
-// }
+impl Samplable<f32> for Normal {
+    fn sample(&self, rng: Option<&mut RandomNumberGenerator>) -> f32 {
+        let sampled: f32;
+        if let Some(rng) = rng {
+            sampled = rng.randn();
+        } else {
+            let mut rng = RandomNumberGenerator::new(None);
+            sampled = rng.randn();
+        }
+        self.mean + sampled * self.std
+    }
+    fn clone_box(&self) -> Box<dyn Samplable<f32>> {
+        Box::new(self.clone())
+    }
+}
+
+#[pymethods]
+impl Normal {
+    #[new]
+    fn pynew(mean: f32, std: f32) -> Self {
+        Normal { mean, std }
+    }
+    #[pyo3(signature=(rng=None))]
+    pub fn sample(&self, rng: Option<&mut RandomNumberGenerator>) -> f32 {
+        Samplable::sample(self, rng)
+    }
+}
 
 // pub struct TruncatedNormal {
 //     mean: f32,
