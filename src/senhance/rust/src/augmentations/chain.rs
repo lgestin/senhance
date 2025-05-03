@@ -8,9 +8,7 @@ use numpy::{PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
-use super::choose::Choose;
-use super::clipping::Clipping;
-use super::random_noise::RandomNoise;
+use super::o3utils::extract_augmentation;
 
 #[derive(Debug, Clone)]
 pub struct ChainParameters<T> {
@@ -160,19 +158,11 @@ impl PyChainParameters {
 impl Chain {
     #[new]
     #[pyo3(signature = (augmentations, p=1.0))]
-    fn pynew<'py>(augmentations: &Bound<'py, PyList>, p: f32) -> PyResult<Self> {
+    fn pynew<'py>(py: Python<'py>, augmentations: &Bound<'py, PyList>, p: f32) -> PyResult<Self> {
         let mut rust_augmentations: Vec<Box<dyn AnyAugmentation>> =
             Vec::with_capacity(augmentations.len());
         for augmentation in augmentations.iter() {
-            if let Ok(rust_augmentation) = augmentation.extract::<Choose>() {
-                rust_augmentations.push(Box::new(rust_augmentation));
-            } else if let Ok(rust_augmentation) = augmentation.extract::<Chain>() {
-                rust_augmentations.push(Box::new(rust_augmentation));
-            } else if let Ok(rust_augmentation) = augmentation.extract::<Clipping>() {
-                rust_augmentations.push(Box::new(rust_augmentation));
-            } else if let Ok(rust_augmentation) = augmentation.extract::<RandomNoise>() {
-                rust_augmentations.push(Box::new(rust_augmentation));
-            }
+            rust_augmentations.push(extract_augmentation(py, augmentation.into())?);
         }
         Ok(Chain::new(rust_augmentations, p))
     }

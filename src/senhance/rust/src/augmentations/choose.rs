@@ -6,9 +6,7 @@ use numpy::{PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
-use super::chain::Chain;
-use super::clipping::Clipping;
-use super::random_noise::RandomNoise;
+use super::o3utils::extract_augmentation;
 
 #[pyclass]
 #[derive(Debug, Clone)]
@@ -88,6 +86,7 @@ impl Choose {
     #[new]
     #[pyo3(signature = (augmentations, choice_distribution=None, p=1.0))]
     fn pynew<'py>(
+        py: Python<'py>,
         augmentations: &Bound<'py, PyList>,
         choice_distribution: Option<WeightedCategorical>,
         p: f32,
@@ -96,15 +95,7 @@ impl Choose {
             Vec::with_capacity(augmentations.len());
         for augmentation in augmentations.iter() {
             println!("{:?}", augmentation);
-            if let Ok(rust_augmentation) = augmentation.extract::<Choose>() {
-                rust_augmentations.push(Box::new(rust_augmentation));
-            } else if let Ok(rust_augmentation) = augmentation.extract::<Chain>() {
-                rust_augmentations.push(Box::new(rust_augmentation));
-            } else if let Ok(rust_augmentation) = augmentation.extract::<Clipping>() {
-                rust_augmentations.push(Box::new(rust_augmentation));
-            } else if let Ok(rust_augmentation) = augmentation.extract::<RandomNoise>() {
-                rust_augmentations.push(Box::new(rust_augmentation));
-            }
+            rust_augmentations.push(extract_augmentation(py, augmentation.into())?);
         }
         Ok(Choose::new(rust_augmentations, choice_distribution, p))
     }
