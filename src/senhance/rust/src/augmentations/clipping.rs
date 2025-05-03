@@ -1,7 +1,7 @@
 use crate::audio::Audio;
 use crate::augmentations::augmentation::RandomAugmentation;
 use crate::augmentations::distributions::{RandomNumberGenerator, Samplable};
-use ndarray::{Array2, Zip};
+use ndarray::Array2;
 use numpy::{PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 
@@ -22,43 +22,43 @@ pub struct Clipping {
     p: f32,
 }
 
-fn sign(waveform: &Array2<f32>) -> Array2<f32> {
-    let mut sign = Array2::zeros(waveform.dim());
-    Zip::from(&mut sign).and(waveform).for_each(|s, &w| {
-        *s = if w >= 0.0 { 1.0 } else { -1.0 };
-    });
-    sign
-}
+fn clip(waveform: &Array2<f32>, q: f32) -> Result<Array2<f32>, String> {
+    if q < 0.0 || q > 1.0 {
+        return Err("q must be between 0 and 1.".to_string());
+    }
 
-fn clip(waveform: &Array2<f32>, q: f32) -> Array2<f32> {
-    assert!((0.0..=1.0).contains(&q), "q must be between 0 and 1");
+    let mut clipped = Array2::zeros(waveform.dim());
 
-    let sign = sign(waveform);
-    let abs = waveform.mapv(f32::abs);
-    let mut clipped = abs.clone();
+    let mut abs = Vec::with_capacity(clipped.ncols());
+    for i in 0..waveform.nrows() {
+        abs.clear();
+        for &sample in waveform.row(i).iter() {
+            abs.push(sample.abs())
+        }
+        let quantile_idx = (q * abs.len() as f32).floor() as usize;
+        abs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let quantile = abs[quantile_idx];
 
-    for (i, mut abs_channel) in clipped.rows_mut().into_iter().enumerate() {
-        let mut abs_channel_vec: Vec<f32> = abs.row(i).iter().cloned().collect();
-        abs_channel_vec.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        let quantile_idx = (q * abs_channel_vec.len() as f32).floor() as usize;
-        let quantile = abs_channel_vec.get(quantile_idx).copied().unwrap_or(0.0);
-        for (j, value) in abs_channel.iter_mut().enumerate() {
-            *value = sign[[i, j]] * value.min(quantile);
+        for j in 0..waveform.ncols() {
+            let sample = waveform[[i, j]];
+            clipped[[i, j]] = sample.max(-quantile).min(quantile);
         }
     }
-    clipped
+    Ok(clipped)
 }
 
 impl Clipping {
-    pub fn new(quantile_distribution: Box<dyn Samplable<f32>>, p: f32) -> Self {
-        assert!((0.0..=1.0).contains(&p), "p must be between 0 and 1");
-        Clipping {
+    pub fn new(quantile_distribution: Box<dyn Samplable<f32>>, p: f32) -> Result<Self, String> {
+        if p < 0.0 || p > 1.0 {
+            return Err("p must be between 0 and 1.".to_string());
+        }
+        Ok(Clipping {
             quantile_distribution,
             p,
-        }
+        })
     }
     fn clip(&self, waveform: &Array2<f32>, q: f32) -> Array2<f32> {
-        clip(waveform, q)
+        clip(waveform, q).expect("Error when clipping")
     }
 }
 
@@ -99,7 +99,7 @@ impl Clipping {
     #[pyo3(signature = (quantile_distribution, p=1.0))]
     fn pynew(py: Python, quantile_distribution: PyObject, p: f32) -> PyResult<Self> {
         let quantile: Box<dyn Samplable<f32>> = extract_distribution(py, quantile_distribution)?;
-        Ok(Clipping::new(quantile, p))
+        Ok(Clipping::new(quantile, p).expect("Error when creating Clipping"))
     }
     #[pyo3(name = "sample_parameters", signature = (audio, rng=None))]
     fn py_sample_parameters(
