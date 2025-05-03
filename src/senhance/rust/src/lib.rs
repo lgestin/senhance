@@ -66,6 +66,7 @@ fn rust_ext(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lowpass_window_py, m)?)?;
     m.add_function(wrap_pyfunction!(highpass_py, m)?)?;
     m.add_class::<augmentations::distributions::Uniform>()?;
+    m.add_class::<augmentations::distributions::Normal>()?;
     m.add_class::<augmentations::distributions::WeightedCategorical>()?;
     m.add_class::<augmentations::distributions::RandomNumberGenerator>()?;
     m.add_class::<augmentations::clipping::Clipping>()?;

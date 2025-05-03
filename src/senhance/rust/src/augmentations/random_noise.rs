@@ -1,6 +1,7 @@
+use super::o3utils::extract_distribution;
 use crate::audio::Audio;
 use crate::augmentations::augmentation::RandomAugmentation;
-use crate::augmentations::distributions::{RandomNumberGenerator, Samplable, Uniform};
+use crate::augmentations::distributions::{RandomNumberGenerator, Samplable};
 use ndarray::{Array, Array2};
 use numpy::{PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
@@ -138,27 +139,16 @@ impl RandomAugmentation for RandomNoise {
 #[pymethods]
 impl RandomNoise {
     #[new]
-    #[pyo3(signature = (min_amplitude, max_amplitude, min_beta, max_beta, p=1.0))]
+    #[pyo3(signature = (amplitude_distribution, beta_distribution, p=1.0))]
     fn pynew(
-        min_amplitude: f32,
-        max_amplitude: f32,
-        min_beta: f32,
-        max_beta: f32,
+        py: Python,
+        amplitude_distribution: PyObject,
+        beta_distribution: PyObject,
         p: f32,
     ) -> PyResult<Self> {
-        let amplitude_distribution = Box::new(Uniform {
-            min: min_amplitude,
-            max: max_amplitude,
-        });
-        let beta_distribution = Box::new(Uniform {
-            min: min_beta,
-            max: max_beta,
-        });
-        Ok(RandomNoise {
-            amplitude_distribution,
-            beta_distribution,
-            p,
-        })
+        let amplitude = extract_distribution(py, amplitude_distribution)?;
+        let beta = extract_distribution(py, beta_distribution)?;
+        Ok(RandomNoise::new(amplitude, beta, p))
     }
     #[pyo3(signature = (audio, rng=None))]
     fn sample_parameters(

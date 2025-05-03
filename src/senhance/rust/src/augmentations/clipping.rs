@@ -1,9 +1,11 @@
 use crate::audio::Audio;
 use crate::augmentations::augmentation::RandomAugmentation;
-use crate::augmentations::distributions::{RandomNumberGenerator, Samplable, Uniform};
+use crate::augmentations::distributions::{RandomNumberGenerator, Samplable};
 use ndarray::{Array2, Zip};
 use numpy::{PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
+
+use super::o3utils::extract_distribution;
 
 #[pyclass]
 #[derive(Clone)]
@@ -94,27 +96,13 @@ impl RandomAugmentation for Clipping {
 #[pymethods]
 impl Clipping {
     #[new]
-    #[pyo3(signature = (min_quantile, max_quantile, p=1.0))]
-    fn pynew(min_quantile: f32, max_quantile: f32, p: f32) -> PyResult<Self> {
-        let quantile_distribution = Box::new(Uniform {
-            min: min_quantile,
-            max: max_quantile,
-        });
-        Ok(Clipping {
-            quantile_distribution,
-            p,
-        })
+    #[pyo3(signature = (quantile_distribution, p=1.0))]
+    fn pynew(py: Python, quantile_distribution: PyObject, p: f32) -> PyResult<Self> {
+        let quantile: Box<dyn Samplable<f32>> = extract_distribution(py, quantile_distribution)?;
+        Ok(Clipping::new(quantile, p))
     }
-    // #[new]
-    // #[pyo3(signature = (quantile_distribution, p=1.0))]
-    // fn pynew(quantile_distribution: &Box<dyn Samplable<f32>>, p: f32) -> PyResult<Self> {
-    //     Ok(Clipping {
-    //         quantile_distribution,
-    //         p,
-    //     })
-    // }
-    #[pyo3(signature = (audio, rng=None))]
-    fn sample_parameters(
+    #[pyo3(name = "sample_parameters", signature = (audio, rng=None))]
+    fn py_sample_parameters(
         &self,
         audio: &Audio,
         rng: Option<&mut RandomNumberGenerator>,
@@ -123,7 +111,7 @@ impl Clipping {
     }
 
     #[pyo3(name = "augment")]
-    fn augment_py<'py>(
+    fn py_augment<'py>(
         &'py self,
         py: Python<'py>,
         waveform: PyReadonlyArray2<f32>,
