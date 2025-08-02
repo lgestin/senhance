@@ -3,10 +3,11 @@ use ndarray::s;
 use ndarray::{Array1, Array2};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
+use std::fmt;
 
 use crate::resample::resample;
 
-#[pyclass]
+#[pyclass(str = "Audio(waveform, sample_rate={sample_rate})")]
 #[derive(Clone)]
 pub struct Audio {
     pub waveform: Array2<f32>,
@@ -92,6 +93,12 @@ impl Audio {
     }
 }
 
+impl fmt::Display for Audio {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Audio(waveform, sample_rate={})", self.sample_rate)
+    }
+}
+
 #[pymethods]
 impl Audio {
     #[new]
@@ -172,7 +179,13 @@ mod tests {
         const SR: usize = 16_000;
         let target_db: f32 = -23.0;
         let mut random_audio = create_random_audio(3 * SR as i32, SR);
-        //assert_eq!(random_audio.normalize(target_db).loudness_db(), target_db);
+        let normalized_db: f32 = random_audio.normalize(target_db).loudness_db()[0];
+        assert!(
+            (normalized_db - target_db).abs() < 0.001,
+            "Expected loudness to be approximately {}, but got {}",
+            target_db,
+            normalized_db
+        );
         assert_eq!(random_audio.duration_s(), 3 as f64);
     }
 }
