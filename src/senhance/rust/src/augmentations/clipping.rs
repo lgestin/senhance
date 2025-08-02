@@ -85,7 +85,6 @@ impl RandomAugmentation for Clipping {
         rng: Option<&mut RandomNumberGenerator>,
     ) -> ClippingParameters {
         let clip_percentile = self.quantile_distribution.sample(rng);
-        println!("{:?}", clip_percentile);
         ClippingParameters { clip_percentile }
     }
     fn augment(&self, waveform: &Array2<f32>, parameters: &ClippingParameters) -> Array2<f32> {
@@ -126,6 +125,7 @@ impl Clipping {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::augmentations::distributions::Uniform;
     use rand::Rng;
 
     fn create_random_audio(n_samples: usize, sr: usize) -> Audio {
@@ -145,7 +145,9 @@ mod tests {
         let max_random = random_audio
             .waveform
             .fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
-        let max_clipped = clipped.fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
+        let max_clipped = clipped
+            .unwrap()
+            .fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
         assert_ne!(max_random, max_clipped)
     }
 
@@ -154,7 +156,7 @@ mod tests {
         const SR: usize = 16_000;
         let random_audio = create_random_audio(3 * SR, SR);
         let quantile_distribution = Box::new(Uniform::new(0.8, 0.9));
-        let clipping = Clipping::new(quantile_distribution, 1.0);
+        let clipping = Clipping::new(quantile_distribution, 1.0).unwrap();
 
         let mut rng = RandomNumberGenerator::new(Some(0));
         let parameters = clipping.sample_parameters(&random_audio, Some(&mut rng));
@@ -171,11 +173,13 @@ mod tests {
         const SR: usize = 16_000;
         let random_audio = create_random_audio(3 * SR, SR);
         let quantile_distribution = Box::new(Uniform::new(0.8, 0.9));
-        let clipping = Clipping::new(quantile_distribution, 0.0);
+        let clipping = Clipping::new(quantile_distribution, 0.0).unwrap();
 
         let mut rng = RandomNumberGenerator::new(Some(0));
         let parameters = clipping.maybe_sample_parameters(&random_audio, Some(&mut rng));
-        let clipped = clipping.maybe_augment(&random_audio.waveform, parameters.as_ref());
+        let clipped = clipping
+            .maybe_augment(&random_audio.waveform, &parameters)
+            .unwrap();
         let max_random = random_audio
             .waveform
             .fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
