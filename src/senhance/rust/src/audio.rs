@@ -4,6 +4,7 @@ use ndarray::{Array1, Array2};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use std::fmt;
+use std::path::Path;
 
 use crate::resample::resample;
 
@@ -15,12 +16,95 @@ pub struct Audio {
     pub sample_rate: Option<usize>,
 }
 
+fn load_wav<P: AsRef<Path>>(
+    path: P,
+    offset_s: Option<f64>,
+    duration_s: Option<f64>,
+) -> Result<Audio, hound::Error> {
+    let mut reader = hound::WavReader::open(path)?;
+    let spec = reader.spec();
+    let sample_rate = spec.sample_rate as usize;
+    let n_channels = spec.channels as usize;
+    let total_samples = reader.len() as usize;
+
+    let offset: usize;
+    if let Some(offset_s) = offset_s {
+        offset = (offset_s * (sample_rate as f64)) as usize;
+    } else {
+        offset = 0;
+    }
+
+    let n_samples: usize;
+    if let Some(duration_s) = duration_s {
+        n_samples = (duration_s * (sample_rate as f64)) as usize;
+    } else {
+        n_samples = total_samples - offset;
+    }
+
+    let mut waveform = Array2::<f32>::zeros((n_channels, n_samples));
+
+    let mut sample_idx = 0;
+    reader.seek(offset as u32).unwrap();
+    match spec.sample_format {
+        hound::SampleFormat::Float => {
+            let mut samples_iter = reader.samples::<f32>();
+            while sample_idx < n_samples {
+                let channel = sample_idx % n_channels;
+                match samples_iter.next() {
+                    Some(Ok(sample)) => waveform[[channel, sample_idx]] = sample,
+                    Some(Err(e)) => return Err(e),
+                    None => break,
+                }
+                sample_idx += 1;
+            }
+        }
+        hound::SampleFormat::Int => {
+            let bit_depth = spec.bits_per_sample;
+            let max_val = (1i32 << (bit_depth - 1)) as f32;
+
+            let mut samples_iter = reader.samples::<i32>();
+            while sample_idx < n_samples {
+                let channel = sample_idx % n_channels;
+                match samples_iter.next() {
+                    Some(Ok(sample)) => waveform[[channel, sample_idx]] = sample as f32 / max_val,
+                    Some(Err(e)) => return Err(e),
+                    None => break,
+                }
+                sample_idx += 1;
+            }
+        }
+    }
+    Ok(Audio::new(waveform, Some(sample_rate)))
+}
+
 impl Audio {
     pub fn new(waveform: Array2<f32>, sample_rate: Option<usize>) -> Self {
         Audio {
             waveform,
             sample_rate,
         }
+    }
+
+    pub fn from_wav<P: AsRef<Path>>(
+        path: P,
+        offset_s: Option<f64>,
+        duration_s: Option<f64>,
+    ) -> Result<Self, hound::Error> {
+        let path = path.as_ref();
+        if !(path.is_file()) {
+            return Err(hound::Error::IoError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("File {} doesn't exist", path.display()),
+            )));
+        }
+
+        if let Some(ext) = path.extension() {
+            if ext.to_string_lossy().to_lowercase() == "wav" {
+                let audio = load_wav(path, offset_s, duration_s)?;
+                return Ok(audio);
+            }
+        }
+        Err(hound::Error::FormatError("Unsupported file format"))
     }
 
     fn require_sample_rate(&self) -> Result<usize, String> {
@@ -154,17 +238,6 @@ impl Audio {
     }
 }
 
-// fn load_wav(wavpath: String) -> Audio {
-//     let mut reader = hound::WavReader::open(wavpath).unwrap();
-//     let n_channels = reader.spec().channels as u16;
-//     let duration = reader.duration() as u32;
-//
-//     let mut waveform = Array2::<MaybeUninit<f32>>::uninit((n_channels, duration));
-//     for sample in reader.samples() {
-//         sample.err;
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,6 +250,19 @@ mod tests {
             waveform: rand_waveform,
             sample_rate: Some(sr),
         }
+    }
+
+    #[test]
+    fn test_load_audio_from_file() {
+        let path = Path::new("/home/lucas/code/senhance/tests/assets/physicsworks.wav");
+        let audio = Audio::from_wav(path, None, None).unwrap();
+        assert_eq!(audio.waveform.shape(), &[1, 3252535]);
+        let audio = Audio::from_wav(path, Some(1.0), None).unwrap();
+        assert_eq!(audio.waveform.shape(), &[1, 3236535]);
+        let audio = Audio::from_wav(path, None, Some(1.0)).unwrap();
+        assert_eq!(audio.waveform.shape(), &[1, 16000]);
+        let audio = Audio::from_wav(path, Some(1.0), Some(1.0)).unwrap();
+        assert_eq!(audio.waveform.shape(), &[1, 16000]);
     }
 
     #[test]
