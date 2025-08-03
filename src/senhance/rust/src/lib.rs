@@ -69,9 +69,9 @@ fn rust_ext(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<augmentations::distributions::Normal>()?;
     m.add_class::<augmentations::distributions::WeightedCategorical>()?;
     m.add_class::<augmentations::distributions::RandomNumberGenerator>()?;
-    m.add_class::<augmentations::clipping::Clipping>()?;
-    m.add_class::<augmentations::random_noise::RandomNoise>()?;
-    m.add_class::<augmentations::chain::Chain>()?;
-    m.add_class::<augmentations::choose::Choose>()?;
+    m.add_class::<augmentations::clipping::PyClipping>()?;
+    m.add_class::<augmentations::random_noise::PyRandomNoise>()?;
+    m.add_class::<augmentations::chain::PyChain>()?;
+    m.add_class::<augmentations::choose::PyChoose>()?;
     Ok(())
 }

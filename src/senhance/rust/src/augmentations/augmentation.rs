@@ -4,58 +4,103 @@ use ndarray::Array2;
 use std::any::Any;
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 
-#[derive(Debug, Clone)]
-pub enum SampledParameters<P> {
-    Sampled(P),
-    NotSampled,
-    None,
-}
-
-pub trait RandomAugmentation: Any {
+pub trait Augments: Any {
     type Parameters;
 
     fn name(&self) -> &str;
-    fn p(&self) -> f32;
 
     fn sample_parameters(
         &self,
         audio: &Audio,
         rng: Option<&mut RandomNumberGenerator>,
-    ) -> Self::Parameters;
+    ) -> Result<Self::Parameters, String>;
 
-    fn maybe_sample_parameters(
+    fn augment(&self, waveform: &Array2<f32>, parameters: &Self::Parameters) -> Array2<f32>;
+}
+
+#[derive(Debug)]
+pub struct Augmentation<A: Augments> {
+    augmentation: A,
+}
+
+impl<A: Augments> Augmentation<A> {
+    pub fn new(augmentation: A) -> Self {
+        Self { augmentation }
+    }
+
+    pub fn sample_parameters(
+        &self,
+        audio: &Audio,
+        rng: Option<&mut RandomNumberGenerator>,
+    ) -> Result<A::Parameters, String> {
+        match rng {
+            Some(rng) => self.augmentation.sample_parameters(audio, Some(rng)),
+            None => {
+                let mut rng = RandomNumberGenerator::new(None);
+                self.augmentation.sample_parameters(audio, Some(&mut rng))
+            }
+        }
+    }
+
+    pub fn augment(
+        &self,
+        waveform: &Array2<f32>,
+        parameters: &Option<A::Parameters>,
+    ) -> Result<Array2<f32>, String> {
+        match parameters {
+            Some(parameters) => Ok(self.augmentation.augment(waveform, parameters)),
+            None => {
+                let audio = Audio::new(waveform.clone(), None);
+                let parameters = self.augmentation.sample_parameters(&audio, None)?;
+                Ok(self.augmentation.augment(waveform, &parameters))
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct RandomAugmentation<A: Augments> {
+    augmentation: A,
+    p: f32,
+}
+
+impl<A: Augments> RandomAugmentation<A> {
+    pub fn new(augmentation: A, p: f32) -> Result<Self, String> {
+        if p < 0.0 || p > 1.0 {
+            Err("p must be between 0 and 1.".to_string())
+        } else {
+            Ok(Self { augmentation, p })
+        }
+    }
+
+    pub fn sample_parameters(
         &self,
         audio: &Audio,
         mut rng: Option<&mut RandomNumberGenerator>,
-    ) -> SampledParameters<Self::Parameters> {
+    ) -> Result<Option<A::Parameters>, String> {
+        if self.p == 1.0 {
+            return Ok(Some(self.augmentation.sample_parameters(audio, rng)?));
+        }
         let sampled_p: f32 = if let Some(rng) = rng.as_deref_mut() {
             rng.rand()
         } else {
             RandomNumberGenerator::new(None).rand()
         };
-
-        if sampled_p < self.p() {
-            SampledParameters::Sampled(self.sample_parameters(audio, rng))
+        if sampled_p < self.p {
+            Ok(Some(self.augmentation.sample_parameters(audio, rng)?))
         } else {
-            SampledParameters::NotSampled
+            Ok(None)
         }
     }
 
-    fn augment(&self, waveform: &Array2<f32>, parameters: &Self::Parameters) -> Array2<f32>;
-
-    fn maybe_augment(
+    pub fn augment(
         &self,
         waveform: &Array2<f32>,
-        parameters: &SampledParameters<Self::Parameters>,
-    ) -> Result<Array2<f32>, String> {
+        parameters: &Option<A::Parameters>,
+    ) -> Array2<f32> {
         match parameters {
-            SampledParameters::Sampled(parameters) => Ok(self.augment(waveform, parameters)),
-            SampledParameters::NotSampled => Ok(waveform.to_owned()),
-            SampledParameters::None => {
-                let audio = Audio::new(waveform.clone(), 0);
-                let sampled_parameters = self.sample_parameters(&audio, None);
-                Ok(self.augment(waveform, &sampled_parameters))
-            }
+            Some(parameters) => self.augmentation.augment(waveform, parameters),
+            None => waveform.to_owned(),
         }
     }
 }
@@ -88,7 +133,6 @@ impl Debug for dyn CloneableAny {
     }
 }
 
-//pub type AnyParameters = Box<dyn Any + Send + Sync>;
 pub type AnyParameters = Box<dyn CloneableAny>;
 
 impl Clone for Box<dyn CloneableAny> {
@@ -117,24 +161,12 @@ pub trait AnyAugmentation: Send + Sync + Debug {
         &self,
         audio: &Audio,
         rng: Option<&mut RandomNumberGenerator>,
-    ) -> AnyParameters;
-
-    fn maybe_sample_parameters_any(
-        &self,
-        audio: &Audio,
-        rng: Option<&mut RandomNumberGenerator>,
-    ) -> SampledParameters<AnyParameters>;
+    ) -> Result<AnyParameters, String>;
 
     fn augment_any(
         &self,
         waveform: &Array2<f32>,
         parameters: &AnyParameters,
-    ) -> Result<Array2<f32>, String>;
-
-    fn maybe_augment_any(
-        &self,
-        waveform: &Array2<f32>,
-        parameters: SampledParameters<&AnyParameters>,
     ) -> Result<Array2<f32>, String>;
 
     fn clone_box(&self) -> Box<dyn AnyAugmentation>;
@@ -146,7 +178,7 @@ impl Clone for Box<dyn AnyAugmentation> {
     }
 }
 
-impl<A: RandomAugmentation + Clone + 'static + Send + Sync + Debug> AnyAugmentation for A
+impl<A: Augments + Clone + 'static + Send + Sync + Debug> AnyAugmentation for A
 where
     A::Parameters: 'static + Send + Sync + Clone,
 {
@@ -157,26 +189,9 @@ where
         &self,
         audio: &Audio,
         rng: Option<&mut RandomNumberGenerator>,
-    ) -> AnyParameters {
-        let parameters = self.sample_parameters(audio, rng);
-        Box::new(parameters)
-    }
-
-    fn maybe_sample_parameters_any(
-        &self,
-        audio: &Audio,
-        mut rng: Option<&mut RandomNumberGenerator>,
-    ) -> SampledParameters<AnyParameters> {
-        let sampled_p: f32 = if let Some(rng) = rng.as_deref_mut() {
-            rng.rand()
-        } else {
-            RandomNumberGenerator::new(None).rand()
-        };
-        if sampled_p < self.p() {
-            SampledParameters::Sampled(self.sample_parameters_any(audio, rng))
-        } else {
-            SampledParameters::NotSampled
-        }
+    ) -> Result<AnyParameters, String> {
+        let parameters = self.sample_parameters(audio, rng).unwrap();
+        Ok(Box::new(parameters))
     }
 
     fn augment_any(
@@ -188,22 +203,6 @@ where
             return Ok(self.augment(waveform, parameters));
         } else {
             Err("Failed to downcast to A::Parameters".to_string())
-        }
-    }
-
-    fn maybe_augment_any(
-        &self,
-        waveform: &Array2<f32>,
-        parameters: SampledParameters<&AnyParameters>,
-    ) -> Result<Array2<f32>, String> {
-        match parameters {
-            SampledParameters::NotSampled => Ok(waveform.to_owned()),
-            SampledParameters::Sampled(parameters) => self.augment_any(waveform, parameters),
-            SampledParameters::None => {
-                let audio = Audio::new(waveform.clone(), 0);
-                let sampled_parameters = self.sample_parameters_any(&audio, None);
-                self.augment_any(&waveform, &sampled_parameters)
-            }
         }
     }
 

@@ -1,18 +1,19 @@
 use super::o3utils::extract_distribution;
 use crate::audio::Audio;
-use crate::augmentations::augmentation::RandomAugmentation;
+use crate::augmentations::augmentation::{Augments, RandomAugmentation};
 use crate::augmentations::distributions::{RandomNumberGenerator, Samplable};
 use ndarray::{Array, Array2};
 use numpy::{PyArray2, PyReadonlyArray2};
 use pyo3::prelude::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 
-#[pyclass]
+#[pyclass(str = "RandomNoiseParameters(noise={noise}, snr_db={snr_db}, beta={beta})")]
 #[derive(Clone)]
 pub struct RandomNoiseParameters {
+    #[pyo3(get)]
     noise: Audio,
     #[pyo3(get)]
-    amplitude: f32,
+    snr_db: f32,
     #[pyo3(get)]
     beta: f32,
 }
@@ -20,10 +21,8 @@ pub struct RandomNoiseParameters {
 #[pyclass]
 #[derive(Debug)]
 pub struct RandomNoise {
-    amplitude_distribution: Box<dyn Samplable<f32>>,
+    snr_db_distribution: Box<dyn Samplable<f32>>,
     beta_distribution: Box<dyn Samplable<f32>>,
-    #[pyo3(get)]
-    p: f32,
 }
 
 fn colored_noise(
@@ -84,15 +83,12 @@ fn colored_noise(
 
 impl RandomNoise {
     pub fn new(
-        amplitude_distribution: Box<dyn Samplable<f32>>,
+        snr_db_distribution: Box<dyn Samplable<f32>>,
         beta_distribution: Box<dyn Samplable<f32>>,
-        p: f32,
     ) -> Self {
-        assert!((0.0..=1.0).contains(&p), "p must be between 0 and 1");
         RandomNoise {
-            amplitude_distribution,
+            snr_db_distribution,
             beta_distribution,
-            p,
         }
     }
 }
@@ -100,72 +96,148 @@ impl RandomNoise {
 impl Clone for RandomNoise {
     fn clone(&self) -> Self {
         RandomNoise {
-            amplitude_distribution: self.amplitude_distribution.clone_box(),
+            snr_db_distribution: self.snr_db_distribution.clone_box(),
             beta_distribution: self.beta_distribution.clone_box(),
-            p: self.p,
         }
     }
 }
 
-impl RandomAugmentation for RandomNoise {
+impl Augments for RandomNoise {
     type Parameters = RandomNoiseParameters;
     fn name(&self) -> &str {
         "random_noise"
-    }
-    fn p(&self) -> f32 {
-        self.p
     }
     fn sample_parameters(
         &self,
         audio: &Audio,
         mut rng: Option<&mut RandomNumberGenerator>,
-    ) -> RandomNoiseParameters {
-        let amplitude = self.amplitude_distribution.sample(rng.as_deref_mut());
+    ) -> Result<RandomNoiseParameters, String> {
+        let snr_db = self.snr_db_distribution.sample(rng.as_deref_mut());
         let beta = self.beta_distribution.sample(rng.as_deref_mut());
-        let noise = colored_noise(amplitude, beta, audio.waveform.shape()[1], rng);
-        let aud = Audio::new(noise, audio.sample_rate);
-        println!("{:?}", amplitude);
-        RandomNoiseParameters {
-            noise: aud,
-            amplitude,
+        let noise_waveform = colored_noise(1.0, beta, audio.waveform.shape()[1], rng);
+        let mut noise = Audio::new(noise_waveform, audio.sample_rate);
+        noise.normalize(-snr_db + audio.loudness_db().sum() / audio.loudness_db().len() as f32);
+        println!("{:?}", snr_db);
+        Ok(RandomNoiseParameters {
+            noise,
+            snr_db,
             beta,
-        }
+        })
     }
     fn augment(&self, waveform: &Array2<f32>, parameters: &RandomNoiseParameters) -> Array2<f32> {
         waveform + &parameters.noise.waveform
     }
 }
 
+#[pyclass(name = "RandomNoise")]
+#[derive(Debug)]
+pub struct PyRandomNoise {
+    random_noise: RandomAugmentation<RandomNoise>,
+}
+
 #[pymethods]
-impl RandomNoise {
+impl PyRandomNoise {
     #[new]
-    #[pyo3(signature = (amplitude_distribution, beta_distribution, p=1.0))]
+    #[pyo3(signature = (snr_db_distribution, beta_distribution, p=1.0))]
     fn pynew(
         py: Python,
-        amplitude_distribution: PyObject,
+        snr_db_distribution: PyObject,
         beta_distribution: PyObject,
-        p: f32,
+        p: Option<f32>,
     ) -> PyResult<Self> {
-        let amplitude = extract_distribution(py, amplitude_distribution)?;
+        let snr_db = extract_distribution(py, snr_db_distribution)?;
         let beta = extract_distribution(py, beta_distribution)?;
-        Ok(RandomNoise::new(amplitude, beta, p))
+        let random_noise = RandomNoise::new(snr_db, beta);
+        let random_random_noise: RandomAugmentation<RandomNoise>;
+        if let Some(p) = p {
+            random_random_noise = RandomAugmentation::new(random_noise, p).unwrap();
+        } else {
+            random_random_noise = RandomAugmentation::new(random_noise, 1.0).unwrap();
+        }
+        Ok(PyRandomNoise {
+            random_noise: random_random_noise,
+        })
     }
-    #[pyo3(signature = (audio, rng=None))]
+
+    #[pyo3(name = "sample_parameters", signature = (audio, rng=None))]
     fn sample_parameters(
         &self,
         audio: &Audio,
         rng: Option<&mut RandomNumberGenerator>,
-    ) -> RandomNoiseParameters {
-        RandomAugmentation::sample_parameters(self, audio, rng)
+    ) -> PyResult<Option<RandomNoiseParameters>> {
+        self.random_noise
+            .sample_parameters(audio, rng)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))
     }
-    fn augment<'py>(
+
+    #[pyo3(name = "augment")]
+    fn py_augment<'py>(
         &'py self,
         py: Python<'py>,
         waveform: PyReadonlyArray2<f32>,
         parameters: &RandomNoiseParameters,
     ) -> Py<PyArray2<f32>> {
-        let augmented =
-            RandomAugmentation::augment(self, &waveform.as_array().to_owned(), parameters);
+        let augmented = self
+            .random_noise
+            .augment(&waveform.as_array().to_owned(), &Some(parameters.clone()));
         PyArray2::from_array(py, &augmented).to_owned().into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::augmentations::distributions::Uniform;
+    use rand::Rng;
+
+    fn create_random_audio(n_samples: usize, sr: usize) -> Audio {
+        let mut rng = rand::rng();
+        let rand_waveform = Array2::from_shape_fn((1_usize, n_samples as usize), |_| rng.random());
+        Audio {
+            waveform: rand_waveform,
+            sample_rate: Some(sr),
+        }
+    }
+
+    #[test]
+    fn test_random_noise() {
+        const SR: usize = 16_000;
+        let random_audio = create_random_audio(3 * SR, SR);
+        let snr_db_distribution = Box::new(Uniform::new(5.0, 25.0));
+        let beta_distribution = Box::new(Uniform::new(-2.0, 2.0));
+        let random_noise = RandomNoise::new(snr_db_distribution, beta_distribution);
+
+        let mut rng = RandomNumberGenerator::new(Some(0));
+        let parameters = random_noise
+            .sample_parameters(&random_audio, Some(&mut rng))
+            .unwrap();
+        let noisy = random_noise.augment(&random_audio.waveform, &parameters);
+        assert_ne!(
+            noisy, random_audio.waveform,
+            "Noisy audio should be different from original"
+        );
+    }
+
+    #[test]
+    fn test_norandom_noise() {
+        const SR: usize = 16_000;
+        let random_audio = create_random_audio(3 * SR, SR);
+        let snr_db_distribution = Box::new(Uniform::new(5.0, 25.0));
+        let beta_distribution = Box::new(Uniform::new(-2.0, 2.0));
+        let random_noise = RandomAugmentation::new(
+            RandomNoise::new(snr_db_distribution, beta_distribution),
+            0.0,
+        )
+        .unwrap();
+
+        let mut rng = RandomNumberGenerator::new(Some(0));
+        let parameters = random_noise
+            .sample_parameters(&random_audio, Some(&mut rng))
+            .unwrap();
+        let noisy = random_noise.augment(&random_audio.waveform, &parameters);
+        assert_eq!(
+            noisy, random_audio.waveform,
+            "Noisy audio should be different from original"
+        );
     }
 }

@@ -7,25 +7,31 @@ use std::fmt;
 
 use crate::resample::resample;
 
-#[pyclass(str = "Audio(waveform, sample_rate={sample_rate})")]
+#[pyclass(str = "Audio(waveform, sample_rate={sample_rate:?})")]
 #[derive(Clone)]
 pub struct Audio {
     pub waveform: Array2<f32>,
     #[pyo3(get)]
-    pub sample_rate: usize,
+    pub sample_rate: Option<usize>,
 }
 
 impl Audio {
-    pub fn new(waveform: Array2<f32>, sample_rate: usize) -> Self {
+    pub fn new(waveform: Array2<f32>, sample_rate: Option<usize>) -> Self {
         Audio {
             waveform,
             sample_rate,
         }
     }
 
-    pub fn duration_s(&self) -> f64 {
+    fn require_sample_rate(&self) -> Result<usize, String> {
+        self.sample_rate
+            .ok_or_else(|| "sample_rate needs to be defined for this operation".to_string())
+    }
+
+    pub fn duration_s(&self) -> Result<f64, String> {
+        let sample_rate = self.require_sample_rate()?;
         let n_samples = &self.waveform.shape()[1];
-        *n_samples as f64 / self.sample_rate as f64
+        Ok(*n_samples as f64 / sample_rate as f64)
     }
 
     pub fn rms_loudness(&self) -> Array1<f32> {
@@ -85,24 +91,30 @@ impl Audio {
         self
     }
 
-    pub fn resample(self, targ_sr: usize) -> Audio {
-        Audio {
-            waveform: resample(self.waveform, self.sample_rate, targ_sr),
-            sample_rate: targ_sr,
-        }
+    pub fn resample(self, targ_sr: usize) -> Result<Audio, String> {
+        let sample_rate = self.require_sample_rate()?;
+        Ok(Audio {
+            waveform: resample(self.waveform, sample_rate, targ_sr),
+            sample_rate: Some(targ_sr),
+        })
     }
 }
 
 impl fmt::Display for Audio {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Audio(waveform, sample_rate={})", self.sample_rate)
+        if let Some(sample_rate) = self.sample_rate {
+            write!(f, "Audio(waveform, sample_rate={})", sample_rate)
+        } else {
+            write!(f, "Audio(waveform, sample_rate=None)")
+        }
     }
 }
 
 #[pymethods]
 impl Audio {
     #[new]
-    fn from_python(waveform: PyReadonlyArray2<f32>, sample_rate: usize) -> Self {
+    #[pyo3(signature = (waveform, sample_rate=None))]
+    fn from_python(waveform: PyReadonlyArray2<f32>, sample_rate: Option<usize>) -> Self {
         Self {
             waveform: waveform.as_array().to_owned(),
             sample_rate,
@@ -138,7 +150,7 @@ impl Audio {
 
     #[pyo3(name = "resample")]
     fn resample_py<'py>(&'py self, targ_sr: usize) -> Self {
-        self.clone().resample(targ_sr)
+        self.clone().resample(targ_sr).unwrap()
     }
 }
 
@@ -163,7 +175,7 @@ mod tests {
         let rand_waveform = Array2::from_shape_fn((1_usize, n_samples as usize), |_| rng.random());
         Audio {
             waveform: rand_waveform,
-            sample_rate: sr,
+            sample_rate: Some(sr),
         }
     }
 
@@ -171,7 +183,7 @@ mod tests {
     fn test_duration_s() {
         const SR: usize = 16_000;
         let random_audio = create_random_audio(3 * SR as i32, SR);
-        assert_eq!(random_audio.duration_s(), 3 as f64);
+        assert_eq!(random_audio.duration_s().unwrap(), 3 as f64);
     }
 
     #[test]
@@ -186,6 +198,6 @@ mod tests {
             target_db,
             normalized_db
         );
-        assert_eq!(random_audio.duration_s(), 3 as f64);
+        assert_eq!(random_audio.duration_s().unwrap(), 3 as f64);
     }
 }

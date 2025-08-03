@@ -1,5 +1,5 @@
 use crate::audio::Audio;
-use crate::augmentations::augmentation::RandomAugmentation;
+use crate::augmentations::augmentation::{Augments, RandomAugmentation};
 use crate::augmentations::distributions::{RandomNumberGenerator, Samplable};
 use ndarray::Array2;
 use numpy::{PyArray2, PyReadonlyArray2};
@@ -18,8 +18,6 @@ pub struct ClippingParameters {
 #[derive(Debug)]
 pub struct Clipping {
     quantile_distribution: Box<dyn Samplable<f32>>,
-    #[pyo3(get)]
-    p: f32,
 }
 
 fn clip(waveform: &Array2<f32>, q: f32) -> Result<Array2<f32>, String> {
@@ -48,14 +46,10 @@ fn clip(waveform: &Array2<f32>, q: f32) -> Result<Array2<f32>, String> {
 }
 
 impl Clipping {
-    pub fn new(quantile_distribution: Box<dyn Samplable<f32>>, p: f32) -> Result<Self, String> {
-        if p < 0.0 || p > 1.0 {
-            return Err("p must be between 0 and 1.".to_string());
-        }
-        Ok(Clipping {
+    pub fn new(quantile_distribution: Box<dyn Samplable<f32>>) -> Self {
+        Clipping {
             quantile_distribution,
-            p,
-        })
+        }
     }
     fn clip(&self, waveform: &Array2<f32>, q: f32) -> Array2<f32> {
         clip(waveform, q).expect("Error when clipping")
@@ -66,47 +60,61 @@ impl Clone for Clipping {
     fn clone(&self) -> Self {
         Clipping {
             quantile_distribution: self.quantile_distribution.clone_box(),
-            p: self.p,
         }
     }
 }
 
-impl RandomAugmentation for Clipping {
+impl Augments for Clipping {
     type Parameters = ClippingParameters;
     fn name(&self) -> &str {
         "clipping"
-    }
-    fn p(&self) -> f32 {
-        self.p
     }
     fn sample_parameters(
         &self,
         _audio: &Audio,
         rng: Option<&mut RandomNumberGenerator>,
-    ) -> ClippingParameters {
+    ) -> Result<ClippingParameters, String> {
         let clip_percentile = self.quantile_distribution.sample(rng);
-        ClippingParameters { clip_percentile }
+        Ok(ClippingParameters { clip_percentile })
     }
     fn augment(&self, waveform: &Array2<f32>, parameters: &ClippingParameters) -> Array2<f32> {
         self.clip(waveform, parameters.clip_percentile)
     }
 }
 
+#[pyclass(name = "Clipping")]
+#[derive(Debug)]
+pub struct PyClipping {
+    clipping: RandomAugmentation<Clipping>,
+}
+
 #[pymethods]
-impl Clipping {
+impl PyClipping {
     #[new]
     #[pyo3(signature = (quantile_distribution, p=1.0))]
-    fn pynew(py: Python, quantile_distribution: PyObject, p: f32) -> PyResult<Self> {
+    fn pynew(py: Python, quantile_distribution: PyObject, p: Option<f32>) -> PyResult<Self> {
         let quantile: Box<dyn Samplable<f32>> = extract_distribution(py, quantile_distribution)?;
-        Ok(Clipping::new(quantile, p).expect("Error when creating Clipping"))
+        let clipping = Clipping::new(quantile);
+        let random_clipping: RandomAugmentation<Clipping>;
+        if let Some(p) = p {
+            random_clipping = RandomAugmentation::new(clipping, p).unwrap();
+        } else {
+            random_clipping = RandomAugmentation::new(clipping, 1.0).unwrap();
+        }
+        Ok(PyClipping {
+            clipping: random_clipping,
+        })
     }
+
     #[pyo3(name = "sample_parameters", signature = (audio, rng=None))]
     fn py_sample_parameters(
         &self,
         audio: &Audio,
         rng: Option<&mut RandomNumberGenerator>,
-    ) -> ClippingParameters {
-        RandomAugmentation::sample_parameters(self, audio, rng)
+    ) -> PyResult<Option<ClippingParameters>> {
+        self.clipping
+            .sample_parameters(audio, rng)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))
     }
 
     #[pyo3(name = "augment")]
@@ -116,8 +124,9 @@ impl Clipping {
         waveform: PyReadonlyArray2<f32>,
         parameters: &ClippingParameters,
     ) -> Py<PyArray2<f32>> {
-        let augmented =
-            RandomAugmentation::augment(self, &waveform.as_array().to_owned(), parameters);
+        let augmented = self
+            .clipping
+            .augment(&waveform.as_array().to_owned(), &Some(parameters.clone()));
         PyArray2::from_array(py, &augmented).to_owned().into()
     }
 }
@@ -133,7 +142,7 @@ mod tests {
         let rand_waveform = Array2::from_shape_fn((1_usize, n_samples as usize), |_| rng.random());
         Audio {
             waveform: rand_waveform,
-            sample_rate: sr,
+            sample_rate: Some(sr),
         }
     }
 
@@ -156,10 +165,12 @@ mod tests {
         const SR: usize = 16_000;
         let random_audio = create_random_audio(3 * SR, SR);
         let quantile_distribution = Box::new(Uniform::new(0.8, 0.9));
-        let clipping = Clipping::new(quantile_distribution, 1.0).unwrap();
+        let clipping = Clipping::new(quantile_distribution);
 
         let mut rng = RandomNumberGenerator::new(Some(0));
-        let parameters = clipping.sample_parameters(&random_audio, Some(&mut rng));
+        let parameters = clipping
+            .sample_parameters(&random_audio, Some(&mut rng))
+            .unwrap();
         let clipped = clipping.augment(&random_audio.waveform, &parameters);
         let max_random = random_audio
             .waveform
@@ -173,13 +184,13 @@ mod tests {
         const SR: usize = 16_000;
         let random_audio = create_random_audio(3 * SR, SR);
         let quantile_distribution = Box::new(Uniform::new(0.8, 0.9));
-        let clipping = Clipping::new(quantile_distribution, 0.0).unwrap();
+        let clipping = RandomAugmentation::new(Clipping::new(quantile_distribution), 0.0).unwrap();
 
         let mut rng = RandomNumberGenerator::new(Some(0));
-        let parameters = clipping.maybe_sample_parameters(&random_audio, Some(&mut rng));
-        let clipped = clipping
-            .maybe_augment(&random_audio.waveform, &parameters)
+        let parameters = clipping
+            .sample_parameters(&random_audio, Some(&mut rng))
             .unwrap();
+        let clipped = clipping.augment(&random_audio.waveform, &parameters.clone());
         let max_random = random_audio
             .waveform
             .fold(f64::NEG_INFINITY, |max, &val| f64::max(max, val as f64));
