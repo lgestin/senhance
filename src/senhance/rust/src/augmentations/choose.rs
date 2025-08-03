@@ -76,9 +76,9 @@ impl Augments for Choose {
 }
 
 #[pyclass(name = "Choose")]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PyChoose {
-    choose: RandomAugmentation<Choose>,
+    pub choose: RandomAugmentation<Choose>,
 }
 
 #[pymethods]
@@ -132,5 +132,10 @@ impl PyChoose {
             .choose
             .augment(&waveform.as_array().to_owned(), &Some(parameters.clone()));
         PyArray2::from_array(py, &augmented).to_owned().into()
+    }
+
+    #[getter]
+    fn get_p(&mut self) -> PyResult<f32> {
+        Ok(self.choose.p)
     }
 }

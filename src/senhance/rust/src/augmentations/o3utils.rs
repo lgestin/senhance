@@ -4,10 +4,10 @@ use crate::augmentations::distributions::{Normal, Samplable, Uniform};
 use pyo3::exceptions::PyTypeError;
 
 use super::augmentation::AnyAugmentation;
-use super::chain::Chain;
-use super::choose::Choose;
-use super::clipping::Clipping;
-use super::random_noise::RandomNoise;
+use super::chain::PyChain;
+use super::choose::PyChoose;
+use super::clipping::PyClipping;
+use super::random_noise::PyRandomNoise;
 
 pub fn extract_distribution<'py>(
     py: Python<'py>,
@@ -28,14 +28,14 @@ pub fn extract_augmentation<'py>(
     py: Python<'py>,
     pyaugmentation: PyObject,
 ) -> PyResult<Box<dyn AnyAugmentation>> {
-    if let Ok(augmentation) = pyaugmentation.extract::<Choose>(py) {
-        Ok(Box::new(augmentation))
-    } else if let Ok(augmentation) = pyaugmentation.extract::<Chain>(py) {
-        Ok(Box::new(augmentation))
-    } else if let Ok(augmentation) = pyaugmentation.extract::<Clipping>(py) {
-        Ok(Box::new(augmentation))
-    } else if let Ok(augmentation) = pyaugmentation.extract::<RandomNoise>(py) {
-        Ok(Box::new(augmentation))
+    if let Ok(augmentation) = pyaugmentation.extract::<PyChoose>(py) {
+        Ok(Box::new(augmentation.choose.augmentation))
+    } else if let Ok(augmentation) = pyaugmentation.extract::<PyChain>(py) {
+        Ok(Box::new(augmentation.chain.augmentation))
+    } else if let Ok(augmentation) = pyaugmentation.extract::<PyClipping>(py) {
+        Ok(Box::new(augmentation.clipping.augmentation))
+    } else if let Ok(augmentation) = pyaugmentation.extract::<PyRandomNoise>(py) {
+        Ok(Box::new(augmentation.random_noise.augmentation))
     } else {
         Err(PyErr::new::<PyTypeError, _>(
             "quantile_distribution should either be Uniform, Normal or TruncatedNormal",

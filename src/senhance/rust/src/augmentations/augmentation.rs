@@ -58,10 +58,10 @@ impl<A: Augments> Augmentation<A> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RandomAugmentation<A: Augments> {
-    augmentation: A,
-    p: f32,
+    pub augmentation: A,
+    pub p: f32,
 }
 
 impl<A: Augments> RandomAugmentation<A> {

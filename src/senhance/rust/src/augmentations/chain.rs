@@ -94,9 +94,9 @@ impl PyChainParameters {
 }
 
 #[pyclass(name = "Chain")]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PyChain {
-    chain: RandomAugmentation<Chain>,
+    pub chain: RandomAugmentation<Chain>,
 }
 
 #[pymethods]

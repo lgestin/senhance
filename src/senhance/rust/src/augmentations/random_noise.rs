@@ -130,9 +130,9 @@ impl Augments for RandomNoise {
 }
 
 #[pyclass(name = "RandomNoise")]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PyRandomNoise {
-    random_noise: RandomAugmentation<RandomNoise>,
+    pub random_noise: RandomAugmentation<RandomNoise>,
 }
 
 #[pymethods]

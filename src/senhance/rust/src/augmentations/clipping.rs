@@ -7,8 +7,8 @@ use pyo3::prelude::*;
 
 use super::o3utils::extract_distribution;
 
-#[pyclass]
-#[derive(Clone)]
+#[pyclass(str = "ClippingParameters(clip_percentile={clip_percentile})")]
+#[derive(Clone, Debug)]
 pub struct ClippingParameters {
     #[pyo3(get)]
     clip_percentile: f32,
@@ -83,9 +83,9 @@ impl Augments for Clipping {
 }
 
 #[pyclass(name = "Clipping")]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PyClipping {
-    clipping: RandomAugmentation<Clipping>,
+    pub clipping: RandomAugmentation<Clipping>,
 }
 
 #[pymethods]
